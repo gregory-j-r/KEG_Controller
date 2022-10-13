@@ -4,7 +4,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
+#include <EEPROM.h>
 
+// define the number of bytes you want to access
+#define EEPROM_SIZE 22
 
 #define ZeroZero 4
 #define OneOne 55
@@ -57,7 +60,7 @@ int OriginReply[OriginReplyLen] = {ZeroZero, ZeroZero, ZeroZero, ZeroZero, // 0 
                                        ZeroZero, ZeroZero, ZeroZero, ZeroZero, // R-Trigger
                                        ZeroZero, ZeroZero, ZeroZero, ZeroZero, // Null
                                        ZeroZero, ZeroZero, ZeroZero, ZeroZero, // Null
-                                       Stop};
+                                       Stop};                                                  // Note: Will need to change this as well as InGameReply Declaration once full controller assembled to poll for the initial values
 
 int InGameReply[InGameReplyLen] = {ZeroZero, ZeroZero, ZeroZero, ZeroZero, // 0 0 0 Start Y X B A
                                        OneZero, ZeroZero, ZeroZero, ZeroZero, // 1 L R Z D-U D-D D-R D-L
@@ -73,7 +76,11 @@ int buttons_in[DigitalInLen] = {0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0}; // 0 0 0 Start
 int analogs_in[AnalogInLen] = {128,128,128,128,0,0}; // Analog-X Analog-Y C-Stick-X C-Stick-Y L-Trigger R-Trigger
 
 int digital_input_pins[DigitalInLen] = {-1,-1,-1,21,22,23,19,18,-1,5,4,15,32,33,25,14}; // should save pin 2 to use for rumble (it's connected to the onboard LED), pin 2 on the devboard is attatched to a pull down resistor, Note gpio5 is connected to a pull up resistor
-int analog_input_pins[AnalogInLen] = {39,34,13,35,26,27}; // maybe change 12 for 36 (aka vp) or 39 (aka vn) as 12 needs to be low during boot but currently is not??
+int analog_input_pins[AnalogInLen] = {39,13,34,35,26,27}; // maybe change 12 for 36 (aka vp) or 39 (aka vn) as 12 needs to be low during boot but currently is not??
+
+// There are 512 memory adresses each able to store 8 bits
+int digital_pin_mem_locs[DigitalInLen] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
+int analog_pin_mem_locs[AnalogInLen] = {16,17,18,19,20,21};
 
 int read_counter = 0;
 int loop_counter = 0;
@@ -90,6 +97,10 @@ void setup() {
       pinMode(digital_input_pins[i],INPUT_PULLUP);
     }
   }
+
+  EEPROM.begin(EEPROM_SIZE);
+//  Save_Buttons_To_Memory(); // Should be run 1 time i.e. first upload then should be removed
+  Read_Buttons_From_Memory();
 
   analogReadResolution(9);
   analogSetWidth(9);
@@ -345,6 +356,7 @@ void Program_Mode(){
     a = -1;
     b = -1;
   }
+  Save_Buttons_To_Memory();
   program_flag = 0;
   BlinkLed(1000);
 }
@@ -362,6 +374,54 @@ void swap_buttons(int ind1, int ind2){
   int temp = digital_input_pins[ind1];
   digital_input_pins[ind1] = digital_input_pins[ind2];
   digital_input_pins[ind2] = temp;
+}
+
+// Save the current values of digital_inpu_pins[] to memory for button remapping saving
+void Save_Buttons_To_Memory(){
+  int addr = -1;
+  int pin = -1;
+  for(int i=0; i<DigitalInLen; i++){
+    addr = digital_pin_mem_locs[i];
+    pin = digital_input_pins[i];
+    if(pin == -1){
+      pin = 69;
+    }
+    EEPROM.write(addr,pin);
+  }
+  addr = -1;
+  pin = -1;
+  for(int i=0; i<AnalogInLen; i++){
+    addr = analog_pin_mem_locs[i];
+    pin = analog_input_pins[i];
+    if(pin == -1){
+      pin = 69;
+    }
+    EEPROM.write(addr,pin);
+  }
+  EEPROM.commit();
+}
+
+void Read_Buttons_From_Memory(){
+  int addr = -1;
+  int pin = -1;
+  for(int i =0; i<DigitalInLen; i++){
+    addr = digital_pin_mem_locs[i];
+    pin = EEPROM.read(addr);
+    if(pin == 69){
+      pin = -1;
+    }
+    digital_input_pins[i] = pin;
+  }
+  addr = -1;
+  pin = -1;
+  for(int i =0; i<AnalogInLen; i++){
+    addr = analog_pin_mem_locs[i];
+    pin = EEPROM.read(addr);
+    if(pin == 69){
+      pin = -1;
+    }
+    analog_input_pins[i] = pin;
+  }
 }
 
 // checks if 3 buttons are pushed simultaneously for t milliseconds
