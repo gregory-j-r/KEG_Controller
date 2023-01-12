@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en-US" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="shortcut icon" href="https://c.s-microsoft.com/favicon.ico?v2" />
+    <title>My Sample PWA</title>
+    <link rel="manifest" href="/manifest.json">
+  </head>
+  <body>
+    <h1>My Sample PWA</h1>
+    <script>
+        if('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        }
+    </script>
+    <nav>
+        <!-- <a href="html/BLE-Pairing.html">BLE-Pairing</a> -->
+        <a href="html/BLE-Pairing.html">Bluetooth Pairing</a>
+    </nav>
+  </body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en-US" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="shortcut icon" href="https://c.s-microsoft.com/favicon.ico?v2" />
+    <title>Bluetooth Pairing</title>
+  </head>
+  <body>
+    <h1>Bluetooth Pairing</h1>
+
+    <button onclick="isWebBluetoothEnabled()">Establish Connection</button>
+    <button onclick="receiveMSG()">Receive MSG</button>
+    <button onclick="sendMSG()">Send MSG</button>
+
+    <p id="demo"></p>
+
+    <script>
+    
+        var BLE_Server;
+
+        function isWebBluetoothEnabled() {
+            // if (!navigator.bluetooth){
+            //     document.getElementById("demo").innerHTML = "No";
+            // }
+
+
+            document.getElementById("demo").innerHTML = "Yes";
+
+            navigator.bluetooth.requestDevice({
+		
+            filters: [{
+            namePrefix: 'KEG'
+            }],
+            optionalServices: ["4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+            ]
+    
+            })
+            
+            // .then(device => {
+            // // Human-readable name of the device.
+            // console.log(device.name);
+
+            // // // Attempts to connect to remote GATT Server.
+            // // return device.gatt.connect();
+            // })
+            // .then(server => { /* … */ })
+            // .catch(error => { console.error(error); });
+
+
+            // .then(device => {
+            // // Human-readable name of the device.
+            // console.log(device.name);
+            // document.getElementById("demo").innerHTML = device.name;
+
+            // // Attempts to connect to remote GATT Server.
+            // return device.gatt.connect();
+            // })
+            // .then(server => { /* … */ })
+            // .catch(error => { console.error(error); });
+
+
+            .then(device => {
+            return device.gatt.connect();
+            // // Human-readable name of the device.
+            // console.log(device.name);
+            // document.getElementById("demo").innerHTML = device.name;
+            })
+            .then(server => {
+            BLE_Server = server;
+            // Getting Battery Service…
+            console.log("Connected");
+            return server.getPrimaryService("4fafc201-1fb5-459e-8fcc-c5c9c331914b");
+            })
+            // .then(service => {
+            // // Getting Battery Level Characteristic…
+            // // return service.getCharacteristic("beb5483e-36e1-4688-b7f5-ea07361b26a8");
+            // })
+            // .then(characteristic => {
+            // // Reading Battery Level…
+            // if (characteristic.properties.notify){
+            //     var enc = new TextDecoder("utf-8");
+            //     console.log("Notifications enabled");
+            //     // characteristic.addEventListener("characteristicvaluechanged",async (event) => {console.log(enc.decode(event.target.value));});
+            //     characteristic.addEventListener("characteristicvaluechanged",handleCharacteristicValueChanged);
+            //     characteristic.startNotifications();
+            // }
+            // // return characteristic.readValue();
+            // })
+            // .then(value => {
+            // // var enc = new TextEncoder();
+            // var enc = new TextDecoder("utf-8");
+            // console.log(enc.decode(value));
+            // // document.getElementById("demo").innerHTML = value;
+            // })
+
+            .then(server => { /* … */ })
+            .catch(error => { console.error(error); });
+
+
+            // .then(device => {
+            //     return device.gatt.connect();
+            // })
+            // .then(server => {
+            //     return server.getPrimaryService("4fafc201-1fb5-459e-8fcc-c5c9c331914b");
+            // })
+            // .then(service => {
+            //     return service.getCharacteristic("beb5483e-36e1-4688-b7f5-ea07361b26a8");
+            // })
+            // .then(characteristic => {
+            //     return characteristic.startNotifications();
+            // })
+            // // .then(characteristic => {
+            // //     characteristic.addEventListener('characteristicvaluechanged', handleCharacteristicValueChanged);
+            // //     console.log('Notifications have been started.');
+            // // })
+            // .then(server => { /* … */ })
+            // .catch(error => { console.error(error); });
+
+
+        }
+
+        async function handleCharacteristicValueChanged(event) {
+            const value = event.target.value;
+            var enc = new TextDecoder("utf-8");
+            console.log(enc.decode(value));
+        }
+
+        function receiveMSG(){
+            BLE_Server.getPrimaryService("4fafc201-1fb5-459e-8fcc-c5c9c331914b")
+            .then(service => {
+            // Getting Battery Level Characteristic…
+            return service.getCharacteristic("beb5483e-36e1-4688-b7f5-ea07361b26a8");
+            })
+            .then(characteristic => {
+            // Reading Battery Level…
+            if (characteristic.properties.notify){
+                var enc = new TextDecoder("utf-8");
+                console.log("Notifications enabled");
+                // characteristic.addEventListener("characteristicvaluechanged",async (event) => {console.log(enc.decode(event.target.value));});
+                characteristic.addEventListener("characteristicvaluechanged",handleCharacteristicValueChanged);
+                characteristic.startNotifications();
+            }
+            // return characteristic.readValue();
+            })
+            .catch(error => { console.error(error); });
+        }
+
+        function sendMSG(){
+            console.log("Send Message Butoon Clicked");
+            BLE_Server.getPrimaryService("4fafc201-1fb5-459e-8fcc-c5c9c331914b")
+            .then(service => {
+            // Getting Battery Level Characteristic…
+            return service.getCharacteristic("da1e7d98-916b-11ed-a1eb-0242ac120002");
+            })
+            .then(characteristic => {
+            var enc = new TextEncoder();
+            characteristic.writeValue(enc.encode("A"));
+            })
+            .catch(error => { console.error(error); });
+        }
+    </script>
+    
+
+  </body>
+</html>
