@@ -1,0 +1,820 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_system.h"
+
+#include "driver/adc.h"
+
+#include "soc/timer_group_struct.h"
+#include "soc/timer_group_reg.h"
+
+#include "rom/ets_sys.h"
+#include "esp_timer.h"
+
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+
+#include <Preferences.h>
+
+Preferences preferences;
+
+// Start BLE Setup partg 1
+#define bleServerName "KEG_V1_GR2"
+bool deviceConnected = false;
+int password_correct = 0;
+String receivedMSG;
+char AnalogMSG[19] = {' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' '};
+int savedCalib = 0;
+unsigned long bt_millis_count;
+#define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define CHARACTERISTIC_UUID_2 "da1e7d98-916b-11ed-a1eb-0242ac120002"
+BLECharacteristic Ch1(CHARACTERISTIC_UUID,BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+BLEDescriptor Dp1(BLEUUID((uint16_t)0x2902));
+BLECharacteristic Ch2(CHARACTERISTIC_UUID_2,BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+BLEDescriptor Dp2(BLEUUID((uint16_t)0x2902));
+//Setup callbacks onConnect and onDisconnect
+class MyServerCallbacks: public BLEServerCallbacks {
+  void onConnect(BLEServer* pServer) {
+    deviceConnected = true;
+  };
+  void onDisconnect(BLEServer* pServer) {
+    deviceConnected = false;
+    password_correct = 0; // reset for next connection
+  }
+};
+// End BLE Setup Part 1
+
+
+
+#define ZeroZero 4
+#define OneOne 55
+#define ZeroOne 52
+#define OneZero 7
+#define Stop 63
+
+#define ProbeReplyLen 13
+#define InGameReplyLen 33
+
+#define OriginEndLen 9
+
+#define ProbeLen 5
+#define OriginLen 5
+#define PollLen 13
+
+#define DigitalInLen 16
+#define AnalogInLen 6
+
+
+
+#define RXD2 16
+#define TXD2 17
+#define buffer_holder_len 45
+
+#define LEDPin 2
+
+hw_timer_t *My_timer = NULL;
+int timer_flag = 1;
+int triggered = 0;
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+
+int prog_t1 = 0;
+int prog_t2 = 0;
+int program_flag = 0;
+int stick_cal_flag = 0;
+
+int dump = 0;
+
+int buffer_holder[buffer_holder_len];
+int readVal = 0;
+int buff_index = 0;
+
+int probe1[] = {ZeroZero,ZeroZero,ZeroZero,ZeroZero,Stop};
+int probe2[] = {OneOne,OneOne,OneOne,OneOne,Stop};
+
+int origin1[] = {ZeroOne,ZeroZero,ZeroZero,ZeroOne,Stop};
+int origin2[] = {ZeroOne,ZeroZero,ZeroZero,OneZero,Stop};
+
+int ProbeReply[ProbeReplyLen] = {ZeroZero, ZeroZero, OneZero, ZeroOne, ZeroZero, ZeroZero, ZeroZero, ZeroZero, ZeroZero, ZeroZero, ZeroZero, OneOne,Stop};
+
+int InGameReply[InGameReplyLen] = {ZeroZero, ZeroZero, ZeroZero, ZeroZero, // 0 0 0 Start Y X B A
+                                       OneZero, ZeroZero, ZeroZero, ZeroZero, // 1 L R Z D-U D-D D-R D-L
+                                       OneZero, ZeroZero, ZeroZero, ZeroZero, // Analog X
+                                       OneZero, ZeroZero, ZeroZero, ZeroZero, // Analog Y
+                                       OneZero, ZeroZero, ZeroZero, ZeroZero, // C-Stick X
+                                       OneZero, ZeroZero, ZeroZero, ZeroZero, // C-Stick Y
+                                       ZeroZero, ZeroZero, ZeroZero, ZeroZero, // L-Trigger
+                                       ZeroZero, ZeroZero, ZeroZero, ZeroZero, // R-Trigger
+                                       Stop};
+
+
+int OriginEnd[OriginEndLen] = {ZeroZero, ZeroZero, ZeroZero, ZeroZero, // Null
+                               ZeroZero, ZeroZero, ZeroZero, ZeroZero, // Null
+                               Stop}; 
+
+int buttons_in[DigitalInLen] = {0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0}; // 0 0 0 Start Y X B A 1 L R Z D-U D-D D-R D-L
+int analogs_in[AnalogInLen] = {128,128,128,128,0,0}; // Analog-X Analog-Y C-Stick-X C-Stick-Y L-Trigger R-Trigger
+
+int digital_input_pins[DigitalInLen] = {-1,-1,-1,21,4,18,23,22,-1,5,19,15,32,25,33,14}; // should save pin 2 to use for rumble (it's connected to the onboard LED), pin 2 on the devboard is attatched to a pull down resistor, Note gpio5 is connected to a pull up resistor
+int analog_input_pins[AnalogInLen] = {34,39,35,13,26,27}; // maybe change 12 for 36 (aka vp) or 39 (aka vn) as 12 needs to be low during boot but currently is not??
+
+int toggle_pins[DigitalInLen] = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
+
+
+int default_digital_pins[DigitalInLen] = {-1,-1,-1,21,4,18,23,22,-1,5,19,15,32,25,33,14};
+int default_analog_pins[AnalogInLen] = {39,34,35,13,26,27};
+
+int read_counter = 0;
+int read_counter1 = 0;
+int loop_counter = 0;
+
+int timer_arr_1[] = {0,0};
+int stick_cal_timer[] = {0,0};
+
+
+
+int AX = 0;
+int AY = 0;
+int CX = 0;
+int CY = 0;
+int AL = 0;
+int AR = 0;
+
+int ax = 0;
+int ay = 0;
+int cx = 0;
+int cy = 0;
+int al = 0;
+int ar = 0;
+
+// start stick cal values
+int AXNeutch;
+int AXHigh;
+int AXLow;
+
+int AYNeutch;
+int AYHigh;
+int AYLow;
+
+int CXNeutch;
+int CXHigh;
+int CXLow;
+
+int CYNeutch;
+int CYHigh;
+int CYLow;
+// end stick cal values
+
+// start trigger cal values
+int LTLow = 50;
+int LTHigh = 150;
+
+int RTLow = 50;
+int RTHigh = 150;
+//end trigger cal values
+
+int flags = 0;
+
+int stop_bit_9 = 0;
+int command_byte = 0;
+
+int num_probes = 0;
+int num_origins = 0;
+int num_polls = 0;
+int num_misc = 0;
+
+
+TaskHandle_t ReadInputs;
+
+void IRAM_ATTR onTimer(){
+  triggered = 1;
+//  digitalWrite(LEDPin, LOW);
+}
+
+void setup() {
+  fill_buff_hold();
+
+  for(int i = 0; i<DigitalInLen; i++){
+    if (digital_input_pins[i] !=  -1){
+      pinMode(digital_input_pins[i],INPUT_PULLUP);
+    }
+  }
+
+  adc1_config_width(ADC_WIDTH_BIT_12);
+  adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_11); // GPIO 34
+  adc1_config_channel_atten(ADC1_CHANNEL_3, ADC_ATTEN_DB_11); // GPIO 39
+  adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11); // GPIO 35
+  adc2_config_channel_atten(ADC2_CHANNEL_4, ADC_ATTEN_DB_11); // GPIO 13
+  adc2_config_channel_atten(ADC2_CHANNEL_9, ADC_ATTEN_DB_11); // GPIO 26
+  adc2_config_channel_atten(ADC2_CHANNEL_7, ADC_ATTEN_DB_11); // GPIO 27
+  
+  readStickCalFromMem(); // read the stick calibration values from memory
+
+  //Start BLE Setup Part 2
+  BLEDevice::init(bleServerName);
+  // Create the BLE Server
+  BLEServer *pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+  // Create the BLE Service
+  BLEService *Service1 = pServer->createService(SERVICE_UUID);
+  Service1->addCharacteristic(&Ch1);
+  Service1->addCharacteristic(&Ch2);
+  Ch1.addDescriptor(&Dp1);
+  Ch1.setValue("Hello World");
+  Ch2.addDescriptor(&Dp2);
+  Ch2.setValue("Waiting for change to exactly: A");
+  // Start the service
+  Service1->start();
+  // Start advertising
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pServer->getAdvertising()->start();
+  bt_millis_count = millis();
+  // End BLE Setup Part 2
+
+  
+  
+  pinMode(LEDPin,OUTPUT);
+
+  My_timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(My_timer, &onTimer, true);
+  timerAlarmWrite(My_timer, 115, false);
+  
+  Serial.begin(9600);
+  
+  
+  
+
+  xTaskCreatePinnedToCore(read_inputs,"Read Inputs",10000,NULL,0,&ReadInputs,  /* Task handle. */0 /*core #*/);
+  
+  Serial2.begin(800000, SERIAL_6N1, RXD2, TXD2);
+  Serial2.setRxBufferSize(256);
+}
+
+
+
+void loop(){
+    communications();
+}
+
+// The task called on core 0
+// Calls the function to update the input state arrays and delays as to not setoff a watchdog timeout
+void read_inputs( void * parameter) {
+//void loop(){
+  for(;;) {
+    check_buttons();
+
+    if(millis()-bt_millis_count>=6){
+      BLEHandler();
+      bt_millis_count = millis();
+    }
+    
+    TIMERG0.wdt_wprotect=TIMG_WDT_WKEY_VALUE;
+    TIMERG0.wdt_feed=1;
+    TIMERG0.wdt_wprotect=0;
+
+    for(int i =0; i<10000; i++){
+      __asm__("nop\n\t");
+    }
+    
+    read_counter1++;
+    if(read_counter1>= 10){
+      update_reply();
+      read_counter1 = 0;
+    }
+
+    if(num_polls >= 1000){
+//      Serial.println();
+//      Serial.print("Num Probes = ");
+//      Serial.println(num_probes);
+//      Serial.print("Num Origins = ");
+//      Serial.println(num_origins);
+//      Serial.print("Num Polls = ");
+//      Serial.println(num_polls);
+//      Serial.print("Num Misc = ");
+//      Serial.println(num_misc);
+      num_probes = 0;
+      num_origins = 0;
+      num_polls = 0;
+      num_misc = 0;
+    }
+  }
+}
+
+// reads the values from all the digital and analog inputs
+// saves the read values into the appropriate arrays
+void check_buttons(){
+  for(int i = 0; i<DigitalInLen; i++){
+    if (digital_input_pins[i] !=-1){
+      buttons_in[i] = !digitalRead(digital_input_pins[i]);
+    }
+  }
+  for(int i = 0; i<AnalogInLen; i++){
+    switch (i){
+      case 0:
+        AX = adc1_get_raw(ADC1_CHANNEL_6);
+//        analogs_in[i] = linearize(AX_SL,AX_SH,AX_N,AX);
+        ax+=AX;///16;
+        break;
+      case 1:
+        AY = adc1_get_raw(ADC1_CHANNEL_3);
+//        analogs_in[i] = linearize(i,AY);
+        ay+=AY;///16;
+        break;
+      case 2:
+        CX = adc1_get_raw(ADC1_CHANNEL_7);
+//        analogs_in[i] = linearize(i,CX);
+        cx+=CX;
+        break;
+      case 3:
+        adc2_get_raw(ADC2_CHANNEL_4,ADC_WIDTH_BIT_12,&CY);
+//        analogs_in[i] = linearize(i,CY);
+        cy+=CY;
+        break;
+      case 4:
+        adc2_get_raw(ADC2_CHANNEL_9,ADC_WIDTH_BIT_9,&AL);
+//        analogs_in[i] = 0; //AL/2;
+        al+=AL/2;
+        break;
+      case 5:
+        adc2_get_raw(ADC2_CHANNEL_7,ADC_WIDTH_BIT_9,&AR);
+//        analogs_in[i] = 0; //AR/2;ar
+        ar+=AR/2;
+        break;
+      default:
+        Serial.println("No Analog Read");
+        break;
+    }
+  }
+}
+
+// loops through the digital input array and converts the readings to 6 bit UART encodings
+// loops through analog input array and converts the readings to 6 bit UART encodings
+// these are then used to update the output signal from the controller
+void update_reply(){
+  int next_val = 0;
+  int j = 0;
+  int count = 0;
+  int val1 = 0;
+  int val2 = 0;
+  for (int i = 0; i<DigitalInLen; i=i+2){
+    j = i+1;
+    val1 = buttons_in[i];
+    val2 = buttons_in[j];
+    next_val = TwoBitsToMessage(val1, val2);
+    InGameReply[count] = next_val;
+    count++;
+  }
+  AX = ax/read_counter1;
+  analogs_in[0] = mapStickVals(AXLow,AXHigh,AXNeutch,AX);
+  ax = 0;
+  AY = ay/read_counter1;
+  analogs_in[1] = mapStickVals(AYLow,AYHigh,AYNeutch,AY);
+  ay = 0;
+  CX = cx/read_counter1;
+  analogs_in[2] = mapStickVals(CXLow,CXHigh,CXNeutch,CX);
+  cx = 0;
+  CY = cy/read_counter1;
+  analogs_in[3] = mapStickVals(CYLow,CYHigh,CYNeutch,CY);
+  cy = 0;
+  AL = al/read_counter1;
+  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,AL/2);
+  al = 0;
+  AR = ar/read_counter1;
+  analogs_in[5] = mapTriggerVals(RTHigh,RTLow,AR/2);
+  ar = 0;
+  
+  int analog_value = 0;
+  for (int k = 0; k<AnalogInLen; k++){
+    analog_value = analogs_in[k];
+    for (int i = 0; i<7; i=i+2){
+      j = i+1;
+      val1 = bitRead(analog_value,7-i);
+      val2 = bitRead(analog_value,7-j);
+      next_val = TwoBitsToMessage(val1, val2);
+      InGameReply[count] = next_val;
+      count++;
+    }
+  }
+  if(InGameReply[1]!=ZeroZero){
+    Serial.println(InGameReply[1]);
+  }
+}
+
+
+// writes data over 6 bit uart line serial 2
+// Absolutely crucial that this function have the portENTER_CRITICAL_ISR wrapping the serial writes
+// this solved the "start" bug as it seems something was interupting the serial writes
+void writeData(int dat[], int len){
+  portENTER_CRITICAL_ISR(&timerMux);
+  for (int i = 0; i<len; i++){
+    Serial2.write(dat[i]);
+  }
+  portEXIT_CRITICAL_ISR(&timerMux);
+}
+
+
+// initialize the buffer holder with all 0's
+void fill_buff_hold(){
+  for(int i =0; i<buffer_holder_len; i++){
+    buffer_holder[i] = 0;
+  }
+}
+
+
+// read all values in the input buffer into a dump variable
+void Clear_UART_Rx(){
+  while(true){
+    if(Serial2.available()){
+      dump = Serial2.read();
+      if(dump == 63){
+        break;
+      }
+    }  
+  }
+}
+
+// prints the contents of array arr to the serial monitor
+void printArr(int arr[], int len){
+  for (int i=0; i<len; i++){
+    Serial.println(arr[i]);
+  }
+}
+
+// prints the contents of an char array arr to the serial monitor
+void printCharArr(char arr[], int len){
+  for (int i=0; i<len; i++){
+    Serial.print(arr[i]);
+  }
+  Serial.println();
+}
+
+// get a strange insertion of -1 into some of the read data
+// this function looks through the buffer holder and removes any single -1 that is present
+// it then shifts the rest of the values into place
+// think the -1 is when it reads but there is no data available, which seems like it should never be possibole but we'll keep that on the backburner
+void cleanUpBufferRead(int len){
+  int j = -1;
+  for(int i = 0; i<len; i++){
+    if (buffer_holder[i] == -1){
+      j = i;
+    }
+  }
+  if (j!=-1){
+    for (int i=j; i<len-1; i++){
+      buffer_holder[i] = buffer_holder[i+1];
+    }
+    buff_index = buff_index - 1;
+  }
+}
+
+// Takes 2 bit input and returns the equivalent message integer value
+int TwoBitsToMessage(int val1, int val2){
+  int next_val = -1;
+  if (val1 == 0 && val2 == 0){
+      next_val = ZeroZero;
+    }
+    if (val1 == 0 && val2 == 1){
+      next_val = ZeroOne;
+    }
+    if (val1 == 1 && val2 == 0){
+      next_val = OneZero;
+    }
+    if (val1 == 1 && val2 == 1){
+      next_val = OneOne;
+    }
+    return next_val;
+}
+
+
+
+//// blinks the onboard LED for t milliseconds
+//void BlinkLed(int t){
+//  digitalWrite(LEDPin,HIGH);
+//  delay(t);
+//  digitalWrite(LEDPin,LOW);
+//}
+
+// swaps a value of digital input pins array into the toggle pins array
+// used to toggle buttons on or off
+void toggle_button(int ind){
+  Serial.println(ind);
+  int temp = digital_input_pins[ind];
+  digital_input_pins[ind] = toggle_pins[ind];
+  toggle_pins[ind] = temp;
+}
+
+// swaps 2 values in the digital_input_pins array
+// used for button remapping
+void swap_buttons(int ind1, int ind2){
+  int temp = digital_input_pins[ind1];
+  digital_input_pins[ind1] = digital_input_pins[ind2];
+  digital_input_pins[ind2] = temp;
+}
+
+void ResetDefaultMapping(){
+  for(int i=0; i<DigitalInLen; i++){
+    digital_input_pins[i] = default_digital_pins[i];
+  }
+  for(int i=0; i<AnalogInLen; i++){
+    analog_input_pins[i] = default_analog_pins[i];
+  }
+}
+
+
+
+
+
+
+int charToInt(char c){
+  int ret = c-'0';
+  return ret;
+}
+
+
+// checks the serial buffer, if data available read it into buffer_holder until reach stop bit (63)
+// parse the message and respond accordingly
+// A timer is used to ensure a faster reply to the poll request, firing the timer every 115 us after the first byte of the poll request is available
+void communications(){
+  if (Serial2.available()>0) {
+    if(timer_flag == 0){
+//      digitalWrite(LEDPin,HIGH);
+      timerWrite(My_timer,0);
+      timerAlarmEnable(My_timer);
+      timer_flag = 1;
+    }
+    readVal = Serial2.read();
+//    Serial.println(readVal);
+    if(buff_index >= buffer_holder_len){
+      buff_index = 0;
+    }
+    buffer_holder[buff_index] = readVal;
+    buff_index++;
+
+    if(triggered == 1){
+//      digitalWrite(LEDPin, LOW);
+      cleanUpBufferRead(buff_index);
+      choose_and_reply();
+      Clear_UART_Rx();
+      buff_index = 0;
+      triggered = 0;
+      timer_flag = 0;
+    }
+
+    if (readVal == Stop){
+      timerAlarmDisable(My_timer);
+      cleanUpBufferRead(buff_index);
+      choose_and_reply();
+      buff_index = 0; 
+      timer_flag = 0;
+    }
+  }
+}
+
+// switch case statement that compares the command byte to known commands
+// based on the command bytes value a different message is sent
+// the uart buffer is then cleared as to not have a read of the sent data occur
+void choose_and_reply(){
+  to_int();
+  switch(command_byte){
+    case 0b00000000:
+      if(stop_bit_9){
+        writeData(ProbeReply,ProbeReplyLen);
+        num_probes++;
+        Serial2.flush();
+        Clear_UART_Rx();
+      }
+      break;
+    case 0b01000001:
+      if(stop_bit_9){
+        writeData(InGameReply,InGameReplyLen-1);
+        writeData(OriginEnd,OriginEndLen);
+        num_origins++;
+        Serial2.flush();
+        Clear_UART_Rx();
+      }
+      break;
+    case 0b01000000:
+        writeData(InGameReply,InGameReplyLen);
+        timer_flag = 0;
+        num_polls++;
+        Serial2.flush();
+        Clear_UART_Rx();
+      break;
+    default:
+      num_misc++;
+      break;
+  }
+}
+
+// converts the first 8 GameCube bits of data to a command byte
+// also sets the stop_bit_9 variable which tells us if the 9th GameCube bit was a stop bit or not
+void to_int(){
+  int j = 0;
+  for(int i=0;i<4;i++){
+    j = i*2;
+    switch(buffer_holder[i]){
+      case ZeroZero:
+        bitWrite(command_byte,8-j-1,0);
+        bitWrite(command_byte,8-j-2,0);
+        break;
+      case ZeroOne:
+        bitWrite(command_byte,8-j-1,0);
+        bitWrite(command_byte,8-j-2,1);
+        break;
+      case OneZero:
+        bitWrite(command_byte,8-j-1,1);
+        bitWrite(command_byte,8-j-2,0);
+        break;
+      case OneOne:
+        bitWrite(command_byte,8-j-1,1);
+        bitWrite(command_byte,8-j-2,1);
+        break;
+      default:
+        break;   
+    }
+  }
+  if(buffer_holder[4]==Stop){
+    stop_bit_9 = 1;
+  }
+  else{
+    stop_bit_9 = 0;
+  }
+}
+
+
+void BLEHandler(){
+  if (deviceConnected) {
+    receivedMSG = (String) Ch2.getValue().c_str();
+//    Serial.println(receivedMSG);
+    char fourthChar = receivedMSG[4];
+//    Serial.println(fourthChar == ',');
+//    Serial.println();
+
+//    if(password_correct==0){
+//      if((String) Ch2.getValue().c_str() == password){
+//        password_correct = 1;
+//          Ch1.setValue("Password Correct");
+//          Ch1.notify();
+//      }
+//    }
+//    else{
+//      // put BLE Code here
+//    }
+    
+    if(receivedMSG == "A"){ // A means requesting Analog data
+      sprintf(AnalogMSG, "%04d,%04d,%04d,%04d", AX, AY, CX, CY);
+      Ch1.setValue(AnalogMSG);
+      Ch1.notify();
+    }
+    else{
+      if(fourthChar == ','){
+//        Serial.println("Parsing");
+        ParseString(receivedMSG);
+//        Serial.println("Done Parsing");
+      }
+      else{
+        if(receivedMSG == "SAC" && savedCalib == 0){ // SAC means Save Analog Calibration Values
+//          Serial.println("Saving");
+          writeStickCalToMem();
+          savedCalib = 1;
+//          Serial.println("Done Saving");
+        }
+      }
+    }
+    
+  }
+}
+
+void ParseString(String str){
+  AXNeutch = str.substring(0,4).toInt();
+  AXLow = str.substring(5,9).toInt();
+  AXHigh = str.substring(10,14).toInt();
+
+  AYNeutch = str.substring(15,19).toInt();
+  AYLow = str.substring(20,24).toInt();
+  AYHigh = str.substring(25,29).toInt();
+
+  CXNeutch = str.substring(30,34).toInt();
+  CXLow = str.substring(35,39).toInt();
+  CXHigh = str.substring(40,44).toInt();
+
+  CYNeutch = str.substring(45,49).toInt();
+  CYLow = str.substring(50,54).toInt();
+  CYHigh = str.substring(55,59).toInt();
+}
+
+// writes the current stick calibration values to memory
+void writeStickCalToMem(){
+  preferences.begin("AnalogCal", false);
+  uint16_t toSave;
+  
+  toSave = AXNeutch;
+  preferences.putUShort("AXNeutch", toSave);
+  toSave = AXHigh;
+  preferences.putUShort("AXHigh", toSave);
+  toSave = AXLow;
+  preferences.putUShort("AXLow", toSave);
+
+  toSave = AYNeutch;
+  preferences.putUShort("AYNeutch", toSave);
+  toSave = AYHigh;
+  preferences.putUShort("AYHigh", toSave);
+  toSave = AYLow;
+  preferences.putUShort("AYLow", toSave);
+
+  toSave = CXNeutch;
+  preferences.putUShort("CXNeutch", toSave);
+  toSave = CXHigh;
+  preferences.putUShort("CXHigh", toSave);
+  toSave = CXLow;
+  preferences.putUShort("CXLow", toSave);
+
+  toSave = CYNeutch;
+  preferences.putUShort("CYNeutch", toSave);
+  toSave = CYHigh;
+  preferences.putUShort("CYHigh", toSave);
+  toSave = CYLow;
+  preferences.putUShort("CYLow", toSave);
+  
+  preferences.end();
+}
+
+// reads the stick halibration values from memory
+void readStickCalFromMem(){
+  preferences.begin("AnalogCal", true);
+  
+  AXNeutch = preferences.getUShort("AXNeutch",0); // if key not there default to 0
+  AXHigh = preferences.getUShort("AXHigh",0);
+  AXLow = preferences.getUShort("AXLow",0);
+
+  AYNeutch = preferences.getUShort("AYNeutch",0);
+  AYHigh = preferences.getUShort("AYHigh",0);
+  AYLow = preferences.getUShort("AYLow",0);
+
+  CXNeutch = preferences.getUShort("CXNeutch",0);
+  CXHigh = preferences.getUShort("CXHigh",0);
+  CXLow = preferences.getUShort("CXLow",0);
+
+  CYNeutch = preferences.getUShort("CYNeutch",0);
+  CYHigh = preferences.getUShort("CYHigh",0);
+  CYLow = preferences.getUShort("CYLow",0);
+  
+  preferences.end();
+}
+
+int mapStickVals(int low,int high,int neutch,int value){
+    int mapped = -1;
+    double lowS;
+    double highS;
+    int highSGood = 0; // for checking division by 0
+    int lowSGood = 0; // for checking division by 0
+    double val = (double) value;
+
+    // make the slopes
+    if((high-neutch)!=0){
+      highS = 127.0/((double)high-(double)neutch);
+      highSGood = 1;
+    }
+    if((neutch-low)!=0){
+      lowS = 127.0/((double)neutch-(double)low);
+      lowSGood = 1;
+    }
+
+    // map the value onto the line
+    if(val <= neutch && lowSGood == 1){
+        mapped = (int) (lowS*val-lowS*neutch+127.0);
+    }
+    if(val > neutch && highSGood == 1){
+        mapped = (int) (highS*val-highS*neutch+127.0);
+    }
+
+    // check if the mapped value exceeds the bounds
+    if(mapped<0){
+        return 0;
+    }
+    if(mapped > 255){
+        return 255;
+    }
+    return mapped;
+}
+
+int mapTriggerVals(int high, int low, int value){
+  int mapped = -1;
+  double val = (double) value;
+  mapped = val/255.0*(high-low)+low;
+  if(mapped <0){
+    return 0;
+  }
+  if(mapped>255){
+    return 255;
+  }
+  return mapped;
+}
+
+
+
