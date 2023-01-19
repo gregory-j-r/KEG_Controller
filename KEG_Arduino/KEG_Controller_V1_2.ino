@@ -28,7 +28,9 @@ bool deviceConnected = false;
 int password_correct = 0;
 String receivedMSG;
 char AnalogMSG[19] = {' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' '};
+char AnalogCalibMSG[59];
 int savedCalib = 0;
+int savedDeadzones = 0;
 unsigned long bt_millis_count;
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -169,6 +171,12 @@ int CYHigh;
 int CYLow;
 // end stick cal values
 
+// start stick deadzone values
+int AXDeadzone[3];
+int AYDeadzone[3];
+int CXDeadzone[3];
+int CYDeadzone[3];
+
 // start trigger cal values
 int LTLow = 50;
 int LTHigh = 150;
@@ -213,6 +221,7 @@ void setup() {
   adc2_config_channel_atten(ADC2_CHANNEL_7, ADC_ATTEN_DB_11); // GPIO 27
   
   readStickCalFromMem(); // read the stick calibration values from memory
+  readStickDeadzonesFromMem(); // read the stick deadzone values from memory
 
   //Start BLE Setup Part 2
   BLEDevice::init(bleServerName);
@@ -268,7 +277,7 @@ void read_inputs( void * parameter) {
   for(;;) {
     check_buttons();
 
-    if(millis()-bt_millis_count>=6){
+    if(millis()-bt_millis_count>=90){
       BLEHandler();
       bt_millis_count = millis();
     }
@@ -370,16 +379,16 @@ void update_reply(){
     count++;
   }
   AX = ax/read_counter1;
-  analogs_in[0] = mapStickVals(AXLow,AXHigh,AXNeutch,AX);
+  analogs_in[0] = mapStickVals(AXLow,AXHigh,AXNeutch,AX,AXDeadzone);
   ax = 0;
   AY = ay/read_counter1;
-  analogs_in[1] = mapStickVals(AYLow,AYHigh,AYNeutch,AY);
+  analogs_in[1] = mapStickVals(AYLow,AYHigh,AYNeutch,AY,AYDeadzone);
   ay = 0;
   CX = cx/read_counter1;
-  analogs_in[2] = mapStickVals(CXLow,CXHigh,CXNeutch,CX);
+  analogs_in[2] = mapStickVals(CXLow,CXHigh,CXNeutch,CX,CXDeadzone);
   cx = 0;
   CY = cy/read_counter1;
-  analogs_in[3] = mapStickVals(CYLow,CYHigh,CYNeutch,CY);
+  analogs_in[3] = mapStickVals(CYLow,CYHigh,CYNeutch,CY,CYDeadzone);
   cy = 0;
   AL = al/read_counter1;
   analogs_in[4] = mapTriggerVals(LTHigh,LTLow,AL/2);
@@ -651,8 +660,9 @@ void BLEHandler(){
   if (deviceConnected) {
     receivedMSG = (String) Ch2.getValue().c_str();
 //    Serial.println(receivedMSG);
-    char fourthChar = receivedMSG[4];
-//    Serial.println(fourthChar == ',');
+    char fifthChar = receivedMSG[4];
+    char fourthChar = receivedMSG[3];
+//    Serial.println(fifthChar == ',');
 //    Serial.println();
 
 //    if(password_correct==0){
@@ -672,9 +682,9 @@ void BLEHandler(){
       Ch1.notify();
     }
     else{
-      if(fourthChar == ','){
+      if(fifthChar == ','){
 //        Serial.println("Parsing");
-        ParseString(receivedMSG);
+        ParseCalibrationString(receivedMSG);
 //        Serial.println("Done Parsing");
       }
       else{
@@ -684,13 +694,32 @@ void BLEHandler(){
           savedCalib = 1;
 //          Serial.println("Done Saving");
         }
+        else{
+          if(receivedMSG =="RAC"){
+            sprintf(AnalogCalibMSG,"%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d", AXNeutch, AXLow, AXHigh, AYNeutch, AYLow, AYHigh, CXNeutch, CXLow, CXHigh, CYNeutch, CYLow, CYHigh);
+            Ch1.setValue(AnalogCalibMSG);
+            Ch1.notify();
+          }
+          else{
+            if(fourthChar == ','){
+              ParseDeadzoneString(receivedMSG);
+            }
+            else{
+              if(receivedMSG =="SSD" && savedDeadzones == 0){// SSD = Save Stick Deadzones
+                writeStickDeadzonesToMem();
+//                Serial.println("Would be saving deadzones");
+                savedDeadzones = 1;
+              }
+            }
+          }
+        }
       }
     }
     
   }
 }
 
-void ParseString(String str){
+void ParseCalibrationString(String str){
   AXNeutch = str.substring(0,4).toInt();
   AXLow = str.substring(5,9).toInt();
   AXHigh = str.substring(10,14).toInt();
@@ -767,7 +796,7 @@ void readStickCalFromMem(){
   preferences.end();
 }
 
-int mapStickVals(int low,int high,int neutch,int value){
+int mapStickVals(int low,int high,int neutch,int value, int dead[]){
     int mapped = -1;
     double lowS;
     double highS;
@@ -800,6 +829,11 @@ int mapStickVals(int low,int high,int neutch,int value){
     if(mapped > 255){
         return 255;
     }
+    
+    if(mapped >= dead[0] && mapped <= dead[1]){
+      mapped = dead[2];
+    }
+    
     return mapped;
 }
 
@@ -816,5 +850,112 @@ int mapTriggerVals(int high, int low, int value){
   return mapped;
 }
 
+void ParseDeadzoneString(String str){
+  AXDeadzone[0] = str.substring(0,3).toInt();
+  AXDeadzone[1] = str.substring(4,7).toInt();
+  AXDeadzone[2] = str.substring(8,11).toInt();
 
+  AYDeadzone[0] = str.substring(12,15).toInt();
+  AYDeadzone[1] = str.substring(16,19).toInt();
+  AYDeadzone[2] = str.substring(20,23).toInt();
 
+  CXDeadzone[0] = str.substring(24,27).toInt();
+  CXDeadzone[1] = str.substring(28,31).toInt();
+  CXDeadzone[2] = str.substring(32,35).toInt();
+
+  CYDeadzone[0] = str.substring(36,39).toInt();
+  CYDeadzone[1] = str.substring(40,43).toInt();
+  CYDeadzone[2] = str.substring(44,47).toInt();
+
+//  Serial.print("AX Deadzone = ");
+//  Serial.print(AXDeadzone[0]);
+//  Serial.print(", ");
+//  Serial.print(AXDeadzone[1]);
+//  Serial.print(", ");
+//  Serial.print(AXDeadzone[2]);
+//  Serial.println();
+//  
+//  Serial.print("AY Deadzone = ");
+//  Serial.print(AYDeadzone[0]);
+//  Serial.print(", ");
+//  Serial.print(AYDeadzone[1]);
+//  Serial.print(", ");
+//  Serial.print(AYDeadzone[2]);
+//  Serial.println();
+//
+//  Serial.print("CX Deadzone = ");
+//  Serial.print(CXDeadzone[0]);
+//  Serial.print(", ");
+//  Serial.print(CXDeadzone[1]);
+//  Serial.print(", ");
+//  Serial.print(CXDeadzone[2]);
+//  Serial.println();
+//  
+//  Serial.print("CY Deadzone = ");
+//  Serial.print(CYDeadzone[0]);
+//  Serial.print(", ");
+//  Serial.print(CYDeadzone[1]);
+//  Serial.print(", ");
+//  Serial.print(CYDeadzone[2]);
+//  Serial.println();
+//  Serial.println();
+  
+}
+
+// writes the current stick calibration values to memory
+void writeStickDeadzonesToMem(){
+  preferences.begin("AnalogDead", false);
+  uint16_t toSave;
+  
+  toSave = AXDeadzone[0];
+  preferences.putUShort("AXDeadLow", toSave);
+  toSave = AXDeadzone[1];
+  preferences.putUShort("AXDeadHigh", toSave);
+  toSave = AXDeadzone[2];
+  preferences.putUShort("AXDeadVal", toSave);
+
+  toSave = AYDeadzone[0];
+  preferences.putUShort("AYDeadLow", toSave);
+  toSave = AYDeadzone[1];
+  preferences.putUShort("AYDeadHigh", toSave);
+  toSave = AYDeadzone[2];
+  preferences.putUShort("AYDeadVal", toSave);
+
+  toSave = CXDeadzone[0];
+  preferences.putUShort("CXDeadLow", toSave);
+  toSave = CXDeadzone[1];
+  preferences.putUShort("CXDeadHigh", toSave);
+  toSave = CXDeadzone[2];
+  preferences.putUShort("CXDeadVal", toSave);
+
+  toSave = CYDeadzone[0];
+  preferences.putUShort("CYDeadLow", toSave);
+  toSave = CYDeadzone[1];
+  preferences.putUShort("CYDeadHigh", toSave);
+  toSave = CYDeadzone[2];
+  preferences.putUShort("CYDeadVal", toSave);
+  
+  preferences.end();
+}
+
+void readStickDeadzonesFromMem(){
+  preferences.begin("AnalogDead", true);
+  
+  AXDeadzone[0] = preferences.getUShort("AXDeadLow",0); 
+  AXDeadzone[1] = preferences.getUShort("AXDeadHigh",0);
+  AXDeadzone[2] = preferences.getUShort("AXDeadVal",0); 
+
+  AYDeadzone[0] = preferences.getUShort("AYDeadLow",0); 
+  AYDeadzone[1] = preferences.getUShort("AYDeadHigh",0);
+  AYDeadzone[2] = preferences.getUShort("AYDeadVal",0); 
+
+  CXDeadzone[0] = preferences.getUShort("CXDeadLow",0); 
+  CXDeadzone[1] = preferences.getUShort("CXDeadHigh",0);
+  CXDeadzone[2] = preferences.getUShort("CXDeadVal",0); 
+
+  CYDeadzone[0] = preferences.getUShort("CYDeadLow",0); 
+  CYDeadzone[1] = preferences.getUShort("CYDeadHigh",0);
+  CYDeadzone[2] = preferences.getUShort("CYDeadVal",0); 
+  
+  preferences.end();
+}
