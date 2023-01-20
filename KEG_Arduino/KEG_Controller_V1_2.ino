@@ -29,8 +29,10 @@ int password_correct = 0;
 String receivedMSG;
 char AnalogMSG[19] = {' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' '};
 char AnalogCalibMSG[59];
+char DigitalMappingMSG[35];
 int savedCalib = 0;
 int savedDeadzones = 0;
+int savedButtonMapping = 0;
 unsigned long bt_millis_count;
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -124,11 +126,10 @@ int analogs_in[AnalogInLen] = {128,128,128,128,0,0}; // Analog-X Analog-Y C-Stic
 int digital_input_pins[DigitalInLen] = {-1,-1,-1,21,4,18,23,22,-1,5,19,15,32,25,33,14}; // should save pin 2 to use for rumble (it's connected to the onboard LED), pin 2 on the devboard is attatched to a pull down resistor, Note gpio5 is connected to a pull up resistor
 int analog_input_pins[AnalogInLen] = {34,39,35,13,26,27}; // maybe change 12 for 36 (aka vp) or 39 (aka vn) as 12 needs to be low during boot but currently is not??
 
-int toggle_pins[DigitalInLen] = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
+int digital_mapping[DigitalInLen] = {-1,-1,-1,21,4,18,23,22,-1,5,19,15,32,25,33,14};
+int digital_toggling[DigitalInLen] = {0,0,0,1,1,1,1,1,0,1,1,1,1,1,1,1};
 
 
-int default_digital_pins[DigitalInLen] = {-1,-1,-1,21,4,18,23,22,-1,5,19,15,32,25,33,14};
-int default_analog_pins[AnalogInLen] = {39,34,35,13,26,27};
 
 int read_counter = 0;
 int read_counter1 = 0;
@@ -222,6 +223,7 @@ void setup() {
   
   readStickCalFromMem(); // read the stick calibration values from memory
   readStickDeadzonesFromMem(); // read the stick deadzone values from memory
+  readButtonMappingFromMem(); // read button mapping from memory
 
   //Start BLE Setup Part 2
   BLEDevice::init(bleServerName);
@@ -508,14 +510,6 @@ int TwoBitsToMessage(int val1, int val2){
 //  digitalWrite(LEDPin,LOW);
 //}
 
-// swaps a value of digital input pins array into the toggle pins array
-// used to toggle buttons on or off
-void toggle_button(int ind){
-  Serial.println(ind);
-  int temp = digital_input_pins[ind];
-  digital_input_pins[ind] = toggle_pins[ind];
-  toggle_pins[ind] = temp;
-}
 
 // swaps 2 values in the digital_input_pins array
 // used for button remapping
@@ -523,15 +517,6 @@ void swap_buttons(int ind1, int ind2){
   int temp = digital_input_pins[ind1];
   digital_input_pins[ind1] = digital_input_pins[ind2];
   digital_input_pins[ind2] = temp;
-}
-
-void ResetDefaultMapping(){
-  for(int i=0; i<DigitalInLen; i++){
-    digital_input_pins[i] = default_digital_pins[i];
-  }
-  for(int i=0; i<AnalogInLen; i++){
-    analog_input_pins[i] = default_analog_pins[i];
-  }
 }
 
 
@@ -662,6 +647,7 @@ void BLEHandler(){
 //    Serial.println(receivedMSG);
     char fifthChar = receivedMSG[4];
     char fourthChar = receivedMSG[3];
+    char thirdChar = receivedMSG[2];
 //    Serial.println(fifthChar == ',');
 //    Serial.println();
 
@@ -709,6 +695,25 @@ void BLEHandler(){
                 writeStickDeadzonesToMem();
 //                Serial.println("Would be saving deadzones");
                 savedDeadzones = 1;
+              }
+              else{
+                if(thirdChar == '.'){
+                  ParseButtonMappingString(receivedMSG);
+                }
+                else{
+                  if(receivedMSG == "RBM"){
+                    fillDigitalMappingMessage();
+                    Ch1.setValue(DigitalMappingMSG);
+                    Ch1.notify();
+                  }
+                  else{
+                    if(receivedMSG == "SBM" && savedButtonMapping == 0){
+                      writeButtonMappingToMem();
+//                      Serial.println("Would be saving button mapping");
+                      savedButtonMapping = 1;
+                    }
+                  }
+                }
               }
             }
           }
@@ -959,3 +964,375 @@ void readStickDeadzonesFromMem(){
   
   preferences.end();
 }
+
+void ParseButtonMappingString(String str){
+  int pin;
+  int toggle;
+  String read_val_1;
+  String read_val_2;
+
+  read_val_1 = str.substring(0,1);
+  read_val_2 = str.substring(1,2);
+  pin = getPinFromChar(read_val_1);
+  toggle = getToggleFromChar(read_val_2);
+  digital_mapping[7] = pin;
+  digital_toggling[7] = toggle;
+
+  read_val_1 = str.substring(3,4);
+  read_val_2 = str.substring(4,5);
+  pin = getPinFromChar(read_val_1);
+  toggle = getToggleFromChar(read_val_2);
+  digital_mapping[6] = pin;
+  digital_toggling[6] = toggle;
+
+  read_val_1 = str.substring(6,7);
+  read_val_2 = str.substring(7,8);
+  pin = getPinFromChar(read_val_1);
+  toggle = getToggleFromChar(read_val_2);
+  digital_mapping[3] = pin;
+  digital_toggling[3] = toggle;
+
+  read_val_1 = str.substring(9,10);
+  read_val_2 = str.substring(10,11);
+  pin = getPinFromChar(read_val_1);
+  toggle = getToggleFromChar(read_val_2);
+  digital_mapping[5] = pin;
+  digital_toggling[5] = toggle;
+
+  read_val_1 = str.substring(12,13);
+  read_val_2 = str.substring(13,14);
+  pin = getPinFromChar(read_val_1);
+  toggle = getToggleFromChar(read_val_2);
+  digital_mapping[4] = pin;
+  digital_toggling[4] = toggle;
+
+  read_val_1 = str.substring(15,16);
+  read_val_2 = str.substring(16,17);
+  pin = getPinFromChar(read_val_1);
+  toggle = getToggleFromChar(read_val_2);
+  digital_mapping[11] = pin;
+  digital_toggling[11] = toggle;
+
+  read_val_1 = str.substring(18,19);
+  read_val_2 = str.substring(19,20);
+  pin = getPinFromChar(read_val_1);
+  toggle = getToggleFromChar(read_val_2);
+  digital_mapping[9] = pin;
+  digital_toggling[9] = toggle;
+
+  read_val_1 = str.substring(21,22);
+  read_val_2 = str.substring(22,23);
+  pin = getPinFromChar(read_val_1);
+  toggle = getToggleFromChar(read_val_2);
+  digital_mapping[10] = pin;
+  digital_toggling[10] = toggle;
+
+  read_val_1 = str.substring(24,25);
+  read_val_2 = str.substring(25,26);
+  pin = getPinFromChar(read_val_1);
+  toggle = getToggleFromChar(read_val_2);
+  digital_mapping[12] = pin;
+  digital_toggling[12] = toggle;
+
+  read_val_1 = str.substring(27,28);
+  read_val_2 = str.substring(28,29);
+  pin = getPinFromChar(read_val_1);
+  toggle = getToggleFromChar(read_val_2);
+  digital_mapping[14] = pin;
+  digital_toggling[14] = toggle;
+
+  read_val_1 = str.substring(30,31);
+  read_val_2 = str.substring(31,32);
+  pin = getPinFromChar(read_val_1);
+  toggle = getToggleFromChar(read_val_2);
+  digital_mapping[13] = pin;
+  digital_toggling[13] = toggle;
+
+  read_val_1 = str.substring(33,34);
+  read_val_2 = str.substring(34,35);
+  pin = getPinFromChar(read_val_1);
+  toggle = getToggleFromChar(read_val_2);
+  digital_mapping[15] = pin;
+  digital_toggling[15] = toggle;
+
+  updateDigitalInputPins();
+}
+
+int getPinFromChar(String char_read){
+  int pin = -1;
+
+  if(char_read == "A"){
+    pin = 22;
+  }
+  else if(char_read == "B"){
+    pin = 23;
+  }
+  else if(char_read == "S"){
+    pin = 21;
+  }
+  else if(char_read == "X"){
+    pin = 18;
+  }
+  else if(char_read == "Y"){
+    pin = 4;
+  }
+  else if(char_read == "Z"){
+    pin = 15;
+  }
+  else if(char_read == "L"){
+    pin = 5;
+  }
+  else if(char_read == "R"){
+    pin = 19;
+  }
+  else if(char_read == "u"){
+    pin = 32;
+  }
+  else if(char_read == "r"){
+    pin = 33;
+  }
+  else if(char_read == "d"){
+    pin = 25;
+  }
+  else if(char_read == "l"){
+    pin = 14;
+  }
+  return pin;
+}
+
+int getToggleFromChar(String char_read){
+  int toggle = 1;
+
+  if(char_read == "Y"){
+    toggle = 1;
+  }
+  else if(char_read == "N"){
+    toggle = 0;
+  }
+  
+  return toggle;
+}
+
+void updateDigitalInputPins(){
+  for(int i=0; i< DigitalInLen; i++){
+    if(digital_toggling[i]==0){
+      digital_input_pins[i] = -1;
+    }
+    else{
+      digital_input_pins[i] = digital_mapping[i];
+    }
+  }
+}
+
+void fillDigitalMappingMessage(){
+  DigitalMappingMSG[0] = getCharFromPin(digital_mapping[7]);
+  DigitalMappingMSG[1] = getCharFromToggle(digital_toggling[7]);
+  DigitalMappingMSG[2] = '.';
+  DigitalMappingMSG[3] = getCharFromPin(digital_mapping[6]);
+  DigitalMappingMSG[4] = getCharFromToggle(digital_toggling[6]);
+  DigitalMappingMSG[5] = '.';
+  DigitalMappingMSG[6] = getCharFromPin(digital_mapping[3]);
+  DigitalMappingMSG[7] = getCharFromToggle(digital_toggling[3]);
+  DigitalMappingMSG[8] = '.';
+  DigitalMappingMSG[9] = getCharFromPin(digital_mapping[5]);
+  DigitalMappingMSG[10] = getCharFromToggle(digital_toggling[5]);
+  DigitalMappingMSG[11] = '.';
+  DigitalMappingMSG[12] = getCharFromPin(digital_mapping[4]);
+  DigitalMappingMSG[13] = getCharFromToggle(digital_toggling[4]);
+  DigitalMappingMSG[14] = '.';
+  DigitalMappingMSG[15] = getCharFromPin(digital_mapping[11]);
+  DigitalMappingMSG[16] = getCharFromToggle(digital_toggling[11]);
+  DigitalMappingMSG[17] = '.';
+  DigitalMappingMSG[18] = getCharFromPin(digital_mapping[9]);
+  DigitalMappingMSG[19] = getCharFromToggle(digital_toggling[9]);
+  DigitalMappingMSG[20] = '.';
+  DigitalMappingMSG[21] = getCharFromPin(digital_mapping[10]);
+  DigitalMappingMSG[22] = getCharFromToggle(digital_toggling[10]);
+  DigitalMappingMSG[23] = '.';
+  DigitalMappingMSG[24] = getCharFromPin(digital_mapping[12]);
+  DigitalMappingMSG[25] = getCharFromToggle(digital_toggling[12]);
+  DigitalMappingMSG[26] = '.';
+  DigitalMappingMSG[27] = getCharFromPin(digital_mapping[14]);
+  DigitalMappingMSG[28] = getCharFromToggle(digital_toggling[14]);
+  DigitalMappingMSG[29] = '.';
+  DigitalMappingMSG[30] = getCharFromPin(digital_mapping[13]);
+  DigitalMappingMSG[31] = getCharFromToggle(digital_toggling[13]);
+  DigitalMappingMSG[32] = '.';
+  DigitalMappingMSG[33] = getCharFromPin(digital_mapping[15]);
+  DigitalMappingMSG[34] = getCharFromToggle(digital_toggling[15]);
+}
+
+char getCharFromPin(int pin){
+  char char_out;
+  switch (pin){
+    case 22:
+      char_out = 'A';
+      break;
+    case 23:
+      char_out = 'B';
+      break;
+    case 21:
+      char_out = 'S';
+      break;
+    case 18:
+      char_out = 'X';
+      break;
+    case 4:
+      char_out = 'Y';
+      break;
+    case 15:
+      char_out = 'Z';
+      break;
+    case 5:
+      char_out = 'L';
+      break;
+    case 19:
+      char_out = 'R';
+      break;
+    case 32:
+      char_out = 'u';
+      break;
+    case 33:
+      char_out = 'r';
+      break;
+    case 25:
+      char_out = 'd';
+      break;
+    case 14:
+      char_out = 'l';
+      break;
+    default:
+        break;
+  }
+  return char_out;
+}
+
+char getCharFromToggle(int toggle){
+  char char_out;
+  switch (toggle){
+    case 1:
+      char_out = 'Y';
+      break;
+    case 0:
+      char_out = 'N';
+      break;
+    default:
+        break;
+  }
+  return char_out;
+}
+
+void writeButtonMappingToMem(){
+  preferences.begin("DigitalMap", false);
+  uint16_t toSave;
+  
+  toSave = digital_mapping[7];
+  preferences.putUShort("A", toSave);
+  toSave = digital_toggling[7];
+  preferences.putUShort("AT", toSave);
+
+  toSave = digital_mapping[6];
+  preferences.putUShort("B", toSave);
+  toSave = digital_toggling[6];
+  preferences.putUShort("BT", toSave);
+
+  toSave = digital_mapping[3];
+  preferences.putUShort("S", toSave);
+  toSave = digital_toggling[3];
+  preferences.putUShort("ST", toSave);
+
+  toSave = digital_mapping[5];
+  preferences.putUShort("X", toSave);
+  toSave = digital_toggling[5];
+  preferences.putUShort("XT", toSave);
+
+  toSave = digital_mapping[4];
+  preferences.putUShort("Y", toSave);
+  toSave = digital_toggling[4];
+  preferences.putUShort("YT", toSave);
+
+  toSave = digital_mapping[11];
+  preferences.putUShort("Z", toSave);
+  toSave = digital_toggling[11];
+  preferences.putUShort("ZT", toSave);
+
+  toSave = digital_mapping[9];
+  preferences.putUShort("L", toSave);
+  toSave = digital_toggling[9];
+  preferences.putUShort("LT", toSave);
+
+  toSave = digital_mapping[10];
+  preferences.putUShort("R", toSave);
+  toSave = digital_toggling[10];
+  preferences.putUShort("RT", toSave);
+
+  toSave = digital_mapping[12];
+  preferences.putUShort("u", toSave);
+  toSave = digital_toggling[12];
+  preferences.putUShort("uT", toSave);
+
+  toSave = digital_mapping[14];
+  preferences.putUShort("r", toSave);
+  toSave = digital_toggling[14];
+  preferences.putUShort("rT", toSave);
+
+  toSave = digital_mapping[13];
+  preferences.putUShort("d", toSave);
+  toSave = digital_toggling[13];
+  preferences.putUShort("dT", toSave);
+
+  toSave = digital_mapping[15];
+  preferences.putUShort("l", toSave);
+  toSave = digital_toggling[15];
+  preferences.putUShort("lT", toSave);
+
+  preferences.end();
+}
+
+void readButtonMappingFromMem(){
+  preferences.begin("DigitalMap", true);
+  
+  AXDeadzone[0] = preferences.getUShort("AXDeadLow",0); 
+
+  digital_mapping[7] = preferences.getUShort("A",-1);
+  digital_toggling[7] = preferences.getUShort("AT",-1);
+
+  digital_mapping[6] = preferences.getUShort("B",-1);
+  digital_toggling[6] = preferences.getUShort("BT",-1);
+
+  digital_mapping[3] = preferences.getUShort("S",-1);
+  digital_toggling[3] = preferences.getUShort("ST",-1);
+
+  digital_mapping[5] = preferences.getUShort("X",-1);
+  digital_toggling[5] = preferences.getUShort("XT",-1);
+
+  digital_mapping[4] = preferences.getUShort("Y",-1);
+  digital_toggling[4] = preferences.getUShort("YT",-1);
+
+  digital_mapping[11] = preferences.getUShort("Z",-1);
+  digital_toggling[11] = preferences.getUShort("ZT",-1);
+
+  digital_mapping[9] = preferences.getUShort("L",-1);
+  digital_toggling[9] = preferences.getUShort("LT",-1);
+
+  digital_mapping[10] = preferences.getUShort("R",-1);
+  digital_toggling[10] = preferences.getUShort("RT",-1);
+
+  digital_mapping[12] = preferences.getUShort("u",-1);
+  digital_toggling[12] = preferences.getUShort("uT",-1);
+
+  digital_mapping[14] = preferences.getUShort("r",-1);
+  digital_toggling[14] = preferences.getUShort("rT",-1);
+
+  digital_mapping[13] = preferences.getUShort("d",-1);
+  digital_toggling[13] = preferences.getUShort("dT",-1);
+
+  digital_mapping[15] = preferences.getUShort("l",-1);
+  digital_toggling[15] = preferences.getUShort("lT",-1);
+  
+  preferences.end();
+
+  updateDigitalInputPins();
+  
+}
+
