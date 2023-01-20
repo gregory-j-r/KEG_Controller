@@ -25,6 +25,7 @@ Preferences preferences;
 // Start BLE Setup partg 1
 #define bleServerName "KEG_V1_GR2"
 bool deviceConnected = false;
+String password = "KEG CONCH";
 int password_correct = 0;
 String receivedMSG;
 char AnalogMSG[19] = {' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' '};
@@ -195,7 +196,8 @@ int num_probes = 0;
 int num_origins = 0;
 int num_polls = 0;
 int num_misc = 0;
-
+int num_updates = 0;
+int uhohflag = 0;
 
 TaskHandle_t ReadInputs;
 
@@ -308,10 +310,16 @@ void read_inputs( void * parameter) {
 //      Serial.println(num_polls);
 //      Serial.print("Num Misc = ");
 //      Serial.println(num_misc);
+//      Serial.print("Num Updates = ");
+//      Serial.println(num_updates);
+//      Serial.print("Uh Oh flag = ");
+//      Serial.println(uhohflag);
       num_probes = 0;
       num_origins = 0;
       num_polls = 0;
       num_misc = 0;
+      num_updates = 0;
+      uhohflag = 0;
     }
   }
 }
@@ -411,9 +419,10 @@ void update_reply(){
       count++;
     }
   }
-  if(InGameReply[1]!=ZeroZero){
-    Serial.println(InGameReply[1]);
-  }
+//  if(InGameReply[1]!=ZeroZero){
+//    Serial.println(InGameReply[1]);
+//  }
+//  num_updates++;
 }
 
 
@@ -648,69 +657,73 @@ void BLEHandler(){
     char fifthChar = receivedMSG[4];
     char fourthChar = receivedMSG[3];
     char thirdChar = receivedMSG[2];
+    int isX = !digitalRead(18);
+    int isY = !digitalRead(4);
 //    Serial.println(fifthChar == ',');
 //    Serial.println();
 
-//    if(password_correct==0){
-//      if((String) Ch2.getValue().c_str() == password){
-//        password_correct = 1;
-//          Ch1.setValue("Password Correct");
-//          Ch1.notify();
-//      }
-//    }
-//    else{
-//      // put BLE Code here
-//    }
-    
-    if(receivedMSG == "A"){ // A means requesting Analog data
-      sprintf(AnalogMSG, "%04d,%04d,%04d,%04d", AX, AY, CX, CY);
-      Ch1.setValue(AnalogMSG);
-      Ch1.notify();
-    }
-    else{
-      if(fifthChar == ','){
-//        Serial.println("Parsing");
-        ParseCalibrationString(receivedMSG);
-//        Serial.println("Done Parsing");
+    if(password_correct==0){
+      if((String) Ch2.getValue().c_str() == password && isX && isY){
+        password_correct = 1;
+          Ch1.setValue("Password Correct");
+          Ch1.notify();
       }
       else{
-        if(receivedMSG == "SAC" && savedCalib == 0){ // SAC means Save Analog Calibration Values
-//          Serial.println("Saving");
-          writeStickCalToMem();
-          savedCalib = 1;
-//          Serial.println("Done Saving");
+        Ch1.setValue("Password Incorrect");
+        Ch1.notify();
+      }
+    }
+    else{
+      if(receivedMSG == "A"){ // A means requesting Analog data
+        sprintf(AnalogMSG, "%04d,%04d,%04d,%04d", AX, AY, CX, CY);
+        Ch1.setValue(AnalogMSG);
+        Ch1.notify();
+      }
+      else{
+        if(fifthChar == ','){
+  //        Serial.println("Parsing");
+          ParseCalibrationString(receivedMSG);
+  //        Serial.println("Done Parsing");
         }
         else{
-          if(receivedMSG =="RAC"){
-            sprintf(AnalogCalibMSG,"%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d", AXNeutch, AXLow, AXHigh, AYNeutch, AYLow, AYHigh, CXNeutch, CXLow, CXHigh, CYNeutch, CYLow, CYHigh);
-            Ch1.setValue(AnalogCalibMSG);
-            Ch1.notify();
+          if(receivedMSG == "SAC" && savedCalib == 0){ // SAC means Save Analog Calibration Values
+  //          Serial.println("Saving");
+            writeStickCalToMem();
+            savedCalib = 1;
+  //          Serial.println("Done Saving");
           }
           else{
-            if(fourthChar == ','){
-              ParseDeadzoneString(receivedMSG);
+            if(receivedMSG =="RAC"){
+              sprintf(AnalogCalibMSG,"%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d", AXNeutch, AXLow, AXHigh, AYNeutch, AYLow, AYHigh, CXNeutch, CXLow, CXHigh, CYNeutch, CYLow, CYHigh);
+              Ch1.setValue(AnalogCalibMSG);
+              Ch1.notify();
             }
             else{
-              if(receivedMSG =="SSD" && savedDeadzones == 0){// SSD = Save Stick Deadzones
-                writeStickDeadzonesToMem();
-//                Serial.println("Would be saving deadzones");
-                savedDeadzones = 1;
+              if(fourthChar == ','){
+                ParseDeadzoneString(receivedMSG);
               }
               else{
-                if(thirdChar == '.'){
-                  ParseButtonMappingString(receivedMSG);
+                if(receivedMSG =="SSD" && savedDeadzones == 0){// SSD = Save Stick Deadzones
+                  writeStickDeadzonesToMem();
+  //                Serial.println("Would be saving deadzones");
+                  savedDeadzones = 1;
                 }
                 else{
-                  if(receivedMSG == "RBM"){
-                    fillDigitalMappingMessage();
-                    Ch1.setValue(DigitalMappingMSG);
-                    Ch1.notify();
+                  if(thirdChar == '.'){
+                    ParseButtonMappingString(receivedMSG);
                   }
                   else{
-                    if(receivedMSG == "SBM" && savedButtonMapping == 0){
-                      writeButtonMappingToMem();
-//                      Serial.println("Would be saving button mapping");
-                      savedButtonMapping = 1;
+                    if(receivedMSG == "RBM"){
+                      fillDigitalMappingMessage();
+                      Ch1.setValue(DigitalMappingMSG);
+                      Ch1.notify();
+                    }
+                    else{
+                      if(receivedMSG == "SBM" && savedButtonMapping == 0){
+                        writeButtonMappingToMem();
+  //                      Serial.println("Would be saving button mapping");
+                        savedButtonMapping = 1;
+                      }
                     }
                   }
                 }
@@ -720,7 +733,6 @@ void BLEHandler(){
         }
       }
     }
-    
   }
 }
 
