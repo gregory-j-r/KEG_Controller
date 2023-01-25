@@ -18,19 +18,120 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
+#include <Update.h>
+
+
+const char* host = "esp32";
+//const char* ssid = "chum bucket";
+//const char* password = "buckethat";
+
+WebServer server(80);
+
+
+
+// Start Login Index Page
+const char* loginIndex = 
+ "<form name='loginForm'>"
+    "<table width='20%' bgcolor='A09F9F' align='center'>"
+        "<tr>"
+            "<td colspan=2>"
+                "<center><font size=4><b>ESP32 Login Page</b></font></center>"
+                "<br>"
+            "</td>"
+            "<br>"
+            "<br>"
+        "</tr>"
+        "<td>Username:</td>"
+        "<td><input type='text' size=25 name='userid'><br></td>"
+        "</tr>"
+        "<br>"
+        "<br>"
+        "<tr>"
+            "<td>Password:</td>"
+            "<td><input type='Password' size=25 name='pwd'><br></td>"
+            "<br>"
+            "<br>"
+        "</tr>"
+        "<tr>"
+            "<td><input type='submit' onclick='check(this.form)' value='Login'></td>"
+        "</tr>"
+    "</table>"
+"</form>"
+"<script>"
+    "function check(form)"
+    "{"
+    "if(form.userid.value=='admin' && form.pwd.value=='admin')"
+    "{"
+    "window.open('/serverIndex')"
+    "}"
+    "else"
+    "{"
+    " alert('Error Password or Username')/*displays error message*/"
+    "}"
+    "}"
+"</script>";
+// Start Login Index Page
+ 
+// Start Server Index Page
+const char* serverIndex = 
+"<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
+"<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
+   "<input type='file' name='update'>"
+        "<input type='submit' value='Update'>"
+    "</form>"
+ "<div id='prg'>progress: 0%</div>"
+ "<script>"
+  "$('form').submit(function(e){"
+  "e.preventDefault();"
+  "var form = $('#upload_form')[0];"
+  "var data = new FormData(form);"
+  " $.ajax({"
+  "url: '/update',"
+  "type: 'POST',"
+  "data: data,"
+  "contentType: false,"
+  "processData:false,"
+  "xhr: function() {"
+  "var xhr = new window.XMLHttpRequest();"
+  "xhr.upload.addEventListener('progress', function(evt) {"
+  "if (evt.lengthComputable) {"
+  "var per = evt.loaded / evt.total;"
+  "$('#prg').html('progress: ' + Math.round(per*100) + '%');"
+  "}"
+  "}, false);"
+  "return xhr;"
+  "},"
+  "success:function(d, s) {"
+  "console.log('success!')" 
+ "},"
+ "error: function (a, b, c) {"
+ "}"
+ "});"
+ "});"
+ "</script>";
+ // End Server Index Page
+
+
+
+
 #include <Preferences.h>
 
 Preferences preferences;
 
 // Start BLE Setup partg 1
-#define bleServerName "KEG_V1_GR2"
+#define bleServerName "KEG_V1_3_G"
 bool deviceConnected = false;
-String password = "KEG CONCH";
+String BLEpassword = "KEG CONCH";
 int password_correct = 0;
 String receivedMSG;
 char AnalogMSG[19] = {' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' '};
 char AnalogCalibMSG[59];
 char DigitalMappingMSG[35];
+char ipAddy[16];
 int savedCalib = 0;
 int savedDeadzones = 0;
 int savedButtonMapping = 0;
@@ -155,6 +256,13 @@ int cy = 0;
 int al = 0;
 int ar = 0;
 
+int aX = 0;
+int aY = 0;
+int cX = 0;
+int cY = 0;
+int aL = 0;
+int aR = 0;
+
 // start stick cal values
 int AXNeutch;
 int AXHigh;
@@ -198,6 +306,8 @@ int num_polls = 0;
 int num_misc = 0;
 int num_updates = 0;
 int uhohflag = 0;
+
+int wifi_flag = 0;
 
 TaskHandle_t ReadInputs;
 
@@ -258,6 +368,8 @@ void setup() {
   timerAlarmWrite(My_timer, 115, false);
   
   Serial.begin(9600);
+
+
   
   
   
@@ -272,6 +384,9 @@ void setup() {
 
 void loop(){
     communications();
+    if(wifi_flag == 1){
+      server.handleClient();
+    }
 }
 
 // The task called on core 0
@@ -314,6 +429,7 @@ void read_inputs( void * parameter) {
 //      Serial.println(num_updates);
 //      Serial.print("Uh Oh flag = ");
 //      Serial.println(uhohflag);
+//      printArr(analogs_in,AnalogInLen);
       num_probes = 0;
       num_origins = 0;
       num_polls = 0;
@@ -388,23 +504,23 @@ void update_reply(){
     InGameReply[count] = next_val;
     count++;
   }
-  AX = ax/read_counter1;
-  analogs_in[0] = mapStickVals(AXLow,AXHigh,AXNeutch,AX,AXDeadzone);
+  aX = ax/read_counter1;
+  analogs_in[0] = mapStickVals(AXLow,AXHigh,AXNeutch,aX,AXDeadzone);
   ax = 0;
-  AY = ay/read_counter1;
-  analogs_in[1] = mapStickVals(AYLow,AYHigh,AYNeutch,AY,AYDeadzone);
+  aY = ay/read_counter1;
+  analogs_in[1] = mapStickVals(AYLow,AYHigh,AYNeutch,aY,AYDeadzone);
   ay = 0;
-  CX = cx/read_counter1;
-  analogs_in[2] = mapStickVals(CXLow,CXHigh,CXNeutch,CX,CXDeadzone);
+  cX = cx/read_counter1;
+  analogs_in[2] = mapStickVals(CXLow,CXHigh,CXNeutch,cX,CXDeadzone);
   cx = 0;
-  CY = cy/read_counter1;
-  analogs_in[3] = mapStickVals(CYLow,CYHigh,CYNeutch,CY,CYDeadzone);
+  cY = cy/read_counter1;
+  analogs_in[3] = mapStickVals(CYLow,CYHigh,CYNeutch,cY,CYDeadzone);
   cy = 0;
-  AL = al/read_counter1;
-  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,AL/2);
+  aL = al/read_counter1;
+  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,aL/2);
   al = 0;
-  AR = ar/read_counter1;
-  analogs_in[5] = mapTriggerVals(RTHigh,RTLow,AR/2);
+  aR = ar/read_counter1;
+  analogs_in[5] = mapTriggerVals(RTHigh,RTLow,aR/2);
   ar = 0;
   
   int analog_value = 0;
@@ -659,11 +775,13 @@ void BLEHandler(){
     char thirdChar = receivedMSG[2];
     int isX = !digitalRead(18);
     int isY = !digitalRead(4);
+    char firstChar = receivedMSG[0];
+    
 //    Serial.println(fifthChar == ',');
 //    Serial.println();
 
     if(password_correct==0){
-      if((String) Ch2.getValue().c_str() == password && isX && isY){
+      if((String) Ch2.getValue().c_str() == BLEpassword && isX && isY){
         password_correct = 1;
           Ch1.setValue("Password Correct");
           Ch1.notify();
@@ -675,7 +793,7 @@ void BLEHandler(){
     }
     else{
       if(receivedMSG == "A"){ // A means requesting Analog data
-        sprintf(AnalogMSG, "%04d,%04d,%04d,%04d", AX, AY, CX, CY);
+        sprintf(AnalogMSG, "%04d,%04d,%04d,%04d", aX, aY, cX, cY);
         Ch1.setValue(AnalogMSG);
         Ch1.notify();
       }
@@ -723,6 +841,13 @@ void BLEHandler(){
                         writeButtonMappingToMem();
   //                      Serial.println("Would be saving button mapping");
                         savedButtonMapping = 1;
+                      }
+                      else{
+                        if(firstChar == 'W' && wifi_flag == 0){
+                          wifiUploadEnabled(receivedMSG);
+                          Ch1.setValue(ipAddy);
+                          Ch1.notify();
+                        }
                       }
                     }
                   }
@@ -1346,5 +1471,108 @@ void readButtonMappingFromMem(){
 
   updateDigitalInputPins();
   
+}
+
+void wifiUploadEnabled(String Message){
+  char *token;
+  char *mystring = (char*) Message.c_str();
+  const char *delimiter ="/";
+  int i = 0;
+  char* ssid;
+  char* password;
+  ipAddy[0] = 'N';
+  ipAddy[1] = 'O';
+  
+  token = strtok(mystring, delimiter);
+  while (token != NULL) {
+  //      Serial.println(token);
+    switch(i){
+      case 1:
+        ssid = token;
+        break;
+      case 2:
+        password = token;
+        break;
+    }
+    token=strtok(NULL, delimiter);
+    i++;
+  }
+   
+  Serial.print("ssid = ");
+  Serial.println(ssid);
+  Serial.print("password = ");
+  Serial.println(password);
+  Serial.println();
+  // Start Wifi setup
+  // Connect to WiFi network
+  WiFi.begin(ssid, password);
+  Serial.println("");
+
+  i = 0;
+  // Wait for connection
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+    i++;
+    if(i>=100){
+      break;
+    }
+  }
+  
+  if(i<100){
+    Serial.println("");
+    Serial.print("Connected to ");
+    Serial.println(ssid);
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+  
+    /*use mdns for host name resolution*/
+    if (!MDNS.begin(host)) { //http://esp32.local
+      Serial.println("Error setting up MDNS responder!");
+      while (1) {
+        delay(1000);
+      }
+    }
+    Serial.println("mDNS responder started");
+    /*return index page which is stored in serverIndex */
+    server.on("/", HTTP_GET, []() {
+      server.sendHeader("Connection", "close");
+      server.send(200, "text/html", loginIndex);
+    });
+    server.on("/serverIndex", HTTP_GET, []() {
+      server.sendHeader("Connection", "close");
+      server.send(200, "text/html", serverIndex);
+    });
+    /*handling uploading firmware file */
+    server.on("/update", HTTP_POST, []() {
+      server.sendHeader("Connection", "close");
+      server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+      ESP.restart();
+    }, []() {
+      HTTPUpload& upload = server.upload();
+      if (upload.status == UPLOAD_FILE_START) {
+        Serial.printf("Update: %s\n", upload.filename.c_str());
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { //start with max available size
+          Update.printError(Serial);
+        }
+      } else if (upload.status == UPLOAD_FILE_WRITE) {
+        /* flashing firmware to ESP*/
+        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+          Update.printError(Serial);
+        }
+      } else if (upload.status == UPLOAD_FILE_END) {
+        if (Update.end(true)) { //true to set the size to the current progress
+          Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+        } else {
+          Update.printError(Serial);
+        }
+      }
+    });
+    server.begin();
+    wifi_flag = 1;
+    WiFi.localIP().toString().toCharArray(ipAddy,15);
+  }
+  
+  // End Wifi Setup
 }
 
