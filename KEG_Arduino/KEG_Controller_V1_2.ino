@@ -123,7 +123,7 @@ const char* serverIndex =
 Preferences preferences;
 
 // Start BLE Setup partg 1
-#define bleServerName "KEG_V1_3_K"
+#define bleServerName "KEG_V1_3_G1"
 bool deviceConnected = false;
 String BLEpassword = "KEG CONCH";
 int password_correct = 0;
@@ -506,23 +506,23 @@ void update_reply(){
     InGameReply[count] = next_val;
     count++;
   }
-  AX = ax/read_counter1;
-  analogs_in[0] = mapStickVals(AXLow,AXHigh,AXNeutch,AX,AXDeadzone);
+  aX = ax/read_counter1;
+  analogs_in[0] = mapStickVals(AXLow,AXHigh,AXNeutch,aX,AXDeadzone);
   ax = 0;
-  AY = ay/read_counter1;
-  analogs_in[1] = mapStickVals(AYLow,AYHigh,AYNeutch,AY,AYDeadzone);
+  aY = ay/read_counter1;
+  analogs_in[1] = mapStickVals(AYLow,AYHigh,AYNeutch,aY,AYDeadzone);
   ay = 0;
-  CX = cx/read_counter1;
-  analogs_in[2] = mapStickVals(CXLow,CXHigh,CXNeutch,CX,CXDeadzone);
+  cX = cx/read_counter1;
+  analogs_in[2] = mapStickVals(CXLow,CXHigh,CXNeutch,cX,CXDeadzone);
   cx = 0;
-  CY = cy/read_counter1;
-  analogs_in[3] = mapStickVals(CYLow,CYHigh,CYNeutch,CY,CYDeadzone);
+  cY = cy/read_counter1;
+  analogs_in[3] = mapStickVals(CYLow,CYHigh,CYNeutch,cY,CYDeadzone);
   cy = 0;
-  AL = al/read_counter1;
-  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,AL);
+  aL = al/read_counter1;
+  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,aL);
   al = 0;
-  AR = ar/read_counter1;
-  analogs_in[5] = mapTriggerVals(RTHigh,RTLow,AR);
+  aR = ar/read_counter1;
+  analogs_in[5] = mapTriggerVals(RTHigh,RTLow,aR);
   ar = 0;
   
   int analog_value = 0;
@@ -795,7 +795,7 @@ void BLEHandler(){
     }
     else{
       if(receivedMSG == "A"){ // A means requesting Analog data
-        sprintf(AnalogMSG, "%04d,%04d,%04d,%04d", AX, AY, CX, CY);
+        sprintf(AnalogMSG, "%04d,%04d,%04d,%04d", aX, aY, cX, cY);
         Ch1.setValue(AnalogMSG);
         Ch1.notify();
       }
