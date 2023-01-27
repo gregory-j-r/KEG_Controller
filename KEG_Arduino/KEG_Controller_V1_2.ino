@@ -123,7 +123,7 @@ const char* serverIndex =
 Preferences preferences;
 
 // Start BLE Setup partg 1
-#define bleServerName "KEG_V1_3_G"
+#define bleServerName "KEG_V1_3_K"
 bool deviceConnected = false;
 String BLEpassword = "KEG CONCH";
 int password_correct = 0;
@@ -289,10 +289,10 @@ int CYDeadzone[3];
 
 // start trigger cal values
 int LTLow = 50;
-int LTHigh = 150;
+int LTHigh = 255;
 
 int RTLow = 50;
-int RTHigh = 150;
+int RTHigh = 255;
 //end trigger cal values
 
 int flags = 0;
@@ -319,6 +319,10 @@ void IRAM_ATTR onTimer(){
 void setup() {
   fill_buff_hold();
 
+  readStickCalFromMem(); // read the stick calibration values from memory
+  readStickDeadzonesFromMem(); // read the stick deadzone values from memory
+  readButtonMappingFromMem(); // read button mapping from memory
+
   for(int i = 0; i<DigitalInLen; i++){
     if (digital_input_pins[i] !=  -1){
       pinMode(digital_input_pins[i],INPUT_PULLUP);
@@ -333,9 +337,7 @@ void setup() {
   adc2_config_channel_atten(ADC2_CHANNEL_9, ADC_ATTEN_DB_11); // GPIO 26
   adc2_config_channel_atten(ADC2_CHANNEL_7, ADC_ATTEN_DB_11); // GPIO 27
   
-  readStickCalFromMem(); // read the stick calibration values from memory
-  readStickDeadzonesFromMem(); // read the stick deadzone values from memory
-  readButtonMappingFromMem(); // read button mapping from memory
+  
 
   //Start BLE Setup Part 2
   BLEDevice::init(bleServerName);
@@ -504,23 +506,23 @@ void update_reply(){
     InGameReply[count] = next_val;
     count++;
   }
-  aX = ax/read_counter1;
-  analogs_in[0] = mapStickVals(AXLow,AXHigh,AXNeutch,aX,AXDeadzone);
+  AX = ax/read_counter1;
+  analogs_in[0] = mapStickVals(AXLow,AXHigh,AXNeutch,AX,AXDeadzone);
   ax = 0;
-  aY = ay/read_counter1;
-  analogs_in[1] = mapStickVals(AYLow,AYHigh,AYNeutch,aY,AYDeadzone);
+  AY = ay/read_counter1;
+  analogs_in[1] = mapStickVals(AYLow,AYHigh,AYNeutch,AY,AYDeadzone);
   ay = 0;
-  cX = cx/read_counter1;
-  analogs_in[2] = mapStickVals(CXLow,CXHigh,CXNeutch,cX,CXDeadzone);
+  CX = cx/read_counter1;
+  analogs_in[2] = mapStickVals(CXLow,CXHigh,CXNeutch,CX,CXDeadzone);
   cx = 0;
-  cY = cy/read_counter1;
-  analogs_in[3] = mapStickVals(CYLow,CYHigh,CYNeutch,cY,CYDeadzone);
+  CY = cy/read_counter1;
+  analogs_in[3] = mapStickVals(CYLow,CYHigh,CYNeutch,CY,CYDeadzone);
   cy = 0;
-  aL = al/read_counter1;
-  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,aL/2);
+  AL = al/read_counter1;
+  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,AL);
   al = 0;
-  aR = ar/read_counter1;
-  analogs_in[5] = mapTriggerVals(RTHigh,RTLow,aR/2);
+  AR = ar/read_counter1;
+  analogs_in[5] = mapTriggerVals(RTHigh,RTLow,AR);
   ar = 0;
   
   int analog_value = 0;
@@ -793,7 +795,7 @@ void BLEHandler(){
     }
     else{
       if(receivedMSG == "A"){ // A means requesting Analog data
-        sprintf(AnalogMSG, "%04d,%04d,%04d,%04d", aX, aY, cX, cY);
+        sprintf(AnalogMSG, "%04d,%04d,%04d,%04d", AX, AY, CX, CY);
         Ch1.setValue(AnalogMSG);
         Ch1.notify();
       }
@@ -1426,46 +1428,46 @@ void writeButtonMappingToMem(){
   preferences.end();
 }
 
+// 0 0 0 Start Y X B A 1 L R Z D-U D-D D-R D-L
+//{-1,-1,-1,21,4,18,23,22,-1,5,19,15,32,25,33,14};
 void readButtonMappingFromMem(){
   preferences.begin("DigitalMap", true);
-  
-  AXDeadzone[0] = preferences.getUShort("AXDeadLow",0); 
 
-  digital_mapping[7] = preferences.getUShort("A",-1);
-  digital_toggling[7] = preferences.getUShort("AT",-1);
+  digital_mapping[7] = preferences.getUShort("A",22);
+  digital_toggling[7] = preferences.getUShort("AT",1);
 
-  digital_mapping[6] = preferences.getUShort("B",-1);
-  digital_toggling[6] = preferences.getUShort("BT",-1);
+  digital_mapping[6] = preferences.getUShort("B",23);
+  digital_toggling[6] = preferences.getUShort("BT",1);
 
-  digital_mapping[3] = preferences.getUShort("S",-1);
-  digital_toggling[3] = preferences.getUShort("ST",-1);
+  digital_mapping[3] = preferences.getUShort("S",21);
+  digital_toggling[3] = preferences.getUShort("ST",1);
 
-  digital_mapping[5] = preferences.getUShort("X",-1);
-  digital_toggling[5] = preferences.getUShort("XT",-1);
+  digital_mapping[5] = preferences.getUShort("X",18);
+  digital_toggling[5] = preferences.getUShort("XT",1);
 
-  digital_mapping[4] = preferences.getUShort("Y",-1);
-  digital_toggling[4] = preferences.getUShort("YT",-1);
+  digital_mapping[4] = preferences.getUShort("Y",4);
+  digital_toggling[4] = preferences.getUShort("YT",1);
 
-  digital_mapping[11] = preferences.getUShort("Z",-1);
-  digital_toggling[11] = preferences.getUShort("ZT",-1);
+  digital_mapping[11] = preferences.getUShort("Z",15);
+  digital_toggling[11] = preferences.getUShort("ZT",1);
 
-  digital_mapping[9] = preferences.getUShort("L",-1);
-  digital_toggling[9] = preferences.getUShort("LT",-1);
+  digital_mapping[9] = preferences.getUShort("L",5);
+  digital_toggling[9] = preferences.getUShort("LT",1);
 
-  digital_mapping[10] = preferences.getUShort("R",-1);
-  digital_toggling[10] = preferences.getUShort("RT",-1);
+  digital_mapping[10] = preferences.getUShort("R",19);
+  digital_toggling[10] = preferences.getUShort("RT",1);
 
-  digital_mapping[12] = preferences.getUShort("u",-1);
-  digital_toggling[12] = preferences.getUShort("uT",-1);
+  digital_mapping[12] = preferences.getUShort("u",32);
+  digital_toggling[12] = preferences.getUShort("uT",1);
 
-  digital_mapping[14] = preferences.getUShort("r",-1);
-  digital_toggling[14] = preferences.getUShort("rT",-1);
+  digital_mapping[14] = preferences.getUShort("r",33);
+  digital_toggling[14] = preferences.getUShort("rT",1);
 
-  digital_mapping[13] = preferences.getUShort("d",-1);
-  digital_toggling[13] = preferences.getUShort("dT",-1);
+  digital_mapping[13] = preferences.getUShort("d",25);
+  digital_toggling[13] = preferences.getUShort("dT",1);
 
-  digital_mapping[15] = preferences.getUShort("l",-1);
-  digital_toggling[15] = preferences.getUShort("lT",-1);
+  digital_mapping[15] = preferences.getUShort("l",14);
+  digital_toggling[15] = preferences.getUShort("lT",1);
   
   preferences.end();
 
