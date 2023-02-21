@@ -14,6 +14,8 @@
 #define ProbeReplyLen 13
 #define InGameReplyLen 33
 
+#define BufferHolderLen 45
+
 #define OriginEndLen 9
 
 #define ProbeLen 5
@@ -25,6 +27,9 @@
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define CHARACTERISTIC_UUID_2 "da1e7d98-916b-11ed-a1eb-0242ac120002"
 
+#define LEDPin 2
+#define RXD2 16
+#define TXD2 17
 
 // Some BLE setup
 
@@ -37,7 +42,6 @@ char AnalogMSG[19] = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '
 char AnalogCalibMSG[59];
 char AnalogDeadzoneMSG[47];
 char DigitalMappingMSG[35];
-char ipAddy[16];
 
 String BLEpassword;
 String receivedMSG;
@@ -75,11 +79,100 @@ class KEGController
 {
 
 public:
-    // TODO
-    void setup();
+    /**
+     * @brief Initialize controller to run. Sets up bluetooth and serial communications, empties buffer, reads
+     *        data from memory, configures adc channels
+    */
+    void setup(){
+        // probably don't need, already initialized to 0
+        // fill_buff_hold();
+
+        readStickCalFromMem();		 // read the stick calibration values from memory
+        readStickDeadzonesFromMem(); // read the stick deadzone values from memory
+        readButtonMappingFromMem();	 // read button mapping from memory
+        readBLEpasswordFromMem();	 // read BLE Password from memory
+
+        setPinsToPullup();           // set the pins to input_pullup mode
+        
+        adc1_config_width(ADC_WIDTH_BIT_12);
+        adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_11); // GPIO 34
+        adc1_config_channel_atten(ADC1_CHANNEL_3, ADC_ATTEN_DB_11); // GPIO 39
+        adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11); // GPIO 35
+        adc2_config_channel_atten(ADC2_CHANNEL_4, ADC_ATTEN_DB_11); // GPIO 13
+        adc2_config_channel_atten(ADC2_CHANNEL_9, ADC_ATTEN_DB_11); // GPIO 26
+        adc2_config_channel_atten(ADC2_CHANNEL_7, ADC_ATTEN_DB_11); // GPIO 27
+ 
+        // check to see if holding down x and y on boot
+        // if yes set the reset password flag
+        // allows users to change old passwords without knowing current password
+        if (!digitalRead(18) && !digitalRead(4))
+        {
+            resetPasswordFlag = 1;
+        }
+
+        setupBLE();
+
+        pinMode(LEDPin, OUTPUT);
+
+        My_timer = timerBegin(0, 80, true);
+        timerAttachInterrupt(My_timer, &onTimer, true);
+        timerAlarmWrite(My_timer, 115, false);
+
+        Serial.begin(9600);
+
+        xTaskCreatePinnedToCore(read_inputs, "Read Inputs", 10000, NULL, 0, &ReadInputs, /* Task handle. */ 0 /*core #*/);
+
+        Serial2.begin(800000, SERIAL_6N1, RXD2, TXD2);
+        Serial2.setRxBufferSize(256);
+    };
     
-    // TODO
-    void loop();
+    /**
+     * @brief main controller loop
+    */
+    void loop()
+    {
+        if (Serial2.available() > 0)
+        {
+            if (timer_flag == 0)
+            {
+                timerWrite(My_timer, 0);
+                timerAlarmEnable(My_timer);
+                timer_flag = 1;
+            }
+            readVal = Serial2.read();
+
+            if (buff_index >= BufferHolderLen)
+            {
+                buff_index = 0;
+            }
+            buffer_holder[buff_index] = readVal;
+            buff_index++;
+
+            if (triggered == 1)
+            {
+                cleanUpBufferRead(buffer_holder, buff_index);
+                choose_and_reply();
+                Clear_UART_Rx();
+                buff_index = 0;
+                triggered = 0;
+                timer_flag = 0;
+            }
+
+            if (readVal == STOP)
+            {
+                timerAlarmDisable(My_timer);
+                cleanUpBufferRead(buffer_holder, buff_index);
+                choose_and_reply();
+                buff_index = 0;
+                timer_flag = 0;
+            }
+        }
+            if (wifi_flag == 1)
+            {
+                server.handleClient();
+            }
+    }
+
 
 private:
 
@@ -90,6 +183,22 @@ private:
     int savedCalib = 0;
     int savedDeadzones = 0;
     int savedButtonMapping = 0;
+
+    // serial buffer array
+    int buffer_holder[BufferHolderLen] = {0};
+    int buff_index = 0;
+
+    // communications variables
+    int command_byte = 0;
+    int stop_bit_9 = 0;
+    int timer_flag = 1;
+
+    // timer stuff
+    hw_timer_t *My_timer = NULL;
+    int timer_flag = 1;
+    int triggered = 0;
+    portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+
 
     /**
      * @brief Struct to hold the analog stick calibration params
@@ -166,6 +275,9 @@ private:
 
     } analogMeans;
 
+    /**
+     * @brief enum that maps two bit combination to message (hex value)
+    */
     enum TwoBitMessage
     {
         ZeroZero = 4,
@@ -175,11 +287,16 @@ private:
         STOP = 63
     };
 
-    std::unordered_map<std::pair<int, int>, int> twoBitsToMessage = {{{0,0}, ZeroZero}, {{1,1}, OneOne},
-                                                          {{0,1}, ZeroOne}, {{1,0}, OneZero}};
+    // Maps the two bits to their message
+    std::unordered_map<std::pair<int, int>, int> twoBitsToMessage = 
+        {{{0,0}, ZeroZero},
+         {{1,1}, OneOne},
+         {{0,1}, ZeroOne},
+         {{1,0}, OneZero}
+        };
     
 
-    // NOTE: enums to index these arrays?
+    // NOTE: enums to index these arrays? Gives names to random indexes floating around
     // Arrays holding pins of each digital and analog input
     int digital_input_pins[DigitalInLen] = {-1, -1, -1, 21, 4, 18, 23, 22, -1, 5, 19, 15, 32, 25, 33, 14}; // should save pin 2 to use for rumble (it's connected to the onboard LED), pin 2 on the devboard is attatched to a pull down resistor, Note gpio5 is connected to a pull up resistor
     int analog_input_pins[AnalogInLen] = {34, 39, 35, 13, 26, 27};										   // maybe change 12 for 36 (aka vp) or 39 (aka vn) as 12 needs to be low during boot but currently is not??
@@ -188,11 +305,14 @@ private:
     int digital_mapping[DigitalInLen] = {-1, -1, -1, 21, 4, 18, 23, 22, -1, 5, 19, 15, 32, 25, 33, 14};
     int digital_toggling[DigitalInLen] = {0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1};
 
-    // Arrays to hold digital (button) and analog inputs from controller
-    int buttons_in[DigitalInLen] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0}; // 0 0 0 Start Y X B A 1 L R Z D-U D-D D-R D-L
-    int analogs_in[AnalogInLen] = {128, 128, 128, 128, 0, 0};						 // Analog-X Analog-Y C-Stick-X C-Stick-Y L-Trigger R-Trigger
+    // Arrays to hold digital and analog inputs from controller
+    // 0 0 0 Start Y X B A 1 L R Z D-U D-D D-R D-L
+    // Analog-X Analog-Y C-Stick-X C-Stick-Y L-Trigger R-Trigger
+    int buttons_in[DigitalInLen] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0}; 
+    int analogs_in[AnalogInLen] = {128, 128, 128, 128, 0, 0};						 
 
-    // Array to hold in-game reply  (uses buttons_in and analogs_in to fill)
+    // Arrays for replies
+    // InGameReply uses buttons_in and analogs_in to fill
     int InGameReply[InGameReplyLen] = {ZeroZero, ZeroZero, ZeroZero, ZeroZero, // 0 0 0 Start Y X B A
                                     OneZero, ZeroZero, ZeroZero, ZeroZero,  // 1 L R Z D-U D-D D-R D-L
                                     OneZero, ZeroZero, ZeroZero, ZeroZero,  // Analog X
@@ -202,12 +322,33 @@ private:
                                     ZeroZero, ZeroZero, ZeroZero, ZeroZero, // L-Trigger
                                     ZeroZero, ZeroZero, ZeroZero, ZeroZero, // R-Trigger
                                     STOP};
-    
+
+    // todo:comment this
+    int ProbeReply[ProbeReplyLen] = {ZeroZero, ZeroZero, OneZero, ZeroOne,
+                                     ZeroZero, ZeroZero, ZeroZero, ZeroZero,
+                                     ZeroZero, ZeroZero, ZeroZero, OneOne, STOP};
+
+
+    int OriginEnd[OriginEndLen] = {ZeroZero, ZeroZero, ZeroZero, ZeroZero, // Null
+                                ZeroZero, ZeroZero, ZeroZero, ZeroZero, // Null
+                                STOP};
     // How many times to read inputs before averaging
     int read_counter1 = 0;
 
 
     //////// /* Private Methods*/ ////////
+
+    // set digital input pin modes to input_pullup
+    void setPinsToPullup()
+    {
+        for (int i = 0; i < DigitalInLen; i++)
+        {
+            if (digital_input_pins[i] != -1)
+            {
+                pinMode(digital_input_pins[i], INPUT_PULLUP);
+            }
+        }
+    }
 
     // The task called on core 0
     // Calls the function to update the input state arrays and delays as to not setoff a watchdog timeout
@@ -263,6 +404,7 @@ private:
         analogSums.cx += analogCX;
 
         // Q: Why is adc2 different like this? Why pass as reference?
+        // A: output of adc2_get_raw is an error message, because adc2 can collide with wifi
         int analogCY;
         adc2_get_raw(ADC2_CHANNEL_4, ADC_WIDTH_BIT_12, &analogCY);
         analogSums.cy += analogCY;
@@ -296,7 +438,7 @@ private:
             j = i + 1;
             val1 = buttons_in[i];
             val2 = buttons_in[j];
-            next_val = TwoBitsToMessage(val1, val2);
+            next_val = twoBitsToMessage[{val1, val2}];
             InGameReply[count] = next_val;
             count++;
         }
@@ -339,7 +481,7 @@ private:
                 j = i + 1;
                 val1 = bitRead(analog_value, 7 - i);
                 val2 = bitRead(analog_value, 7 - j);
-                next_val = TwoBitsToMessage(val1, val2);
+                next_val = twoBitsToMessage[{val1, val2}];
                 InGameReply[count] = next_val;
                 count++;
             }
@@ -350,11 +492,49 @@ private:
         //  num_updates++;
     }
 
+    // switch case statement that compares the command byte to known commands
+    // based on the command bytes value a different message is sent
+    // the uart buffer is then cleared as to not have a read of the sent data occur
+    void choose_and_reply()
+    {
+        to_int();
+        switch (command_byte)
+        {
+        case 0b00000000:
+            if (stop_bit_9)
+            {
+                writeData(ProbeReply, ProbeReplyLen);
+                Serial2.flush();
+                Clear_UART_Rx();
+            }
+            break;
+        case 0b01000001:
+            if (stop_bit_9)
+            {
+                writeData(InGameReply, InGameReplyLen - 1);
+                writeData(OriginEnd, OriginEndLen);
+                Serial2.flush();
+                Clear_UART_Rx();
+            }
+            break;
+        case 0b01000000:
+            writeData(InGameReply, InGameReplyLen);
+            timer_flag = 0;
+            Serial2.flush();
+            Clear_UART_Rx();
+            break;
+        default:
+            // num_misc++;
+            break;
+        }
+    }
+
+
     // checks the physical pins (5,19,22,21) which map to physical buttons (L,R,A,Start) respectively
     // if they are all high the sent message is changed to be only those 4 buttons clicked
     void checkForLRAStart()
     {
-        // maybe make all the pins and indexes named enums or constants
+        // NOTE: maybe make all the pins and indexes named enums or constants
         int LRAStart = 0;
         LRAStart += !digitalRead(5);
         LRAStart += !digitalRead(19);
@@ -376,9 +556,384 @@ private:
         }
     }
 
+ 
+     /* Writes */
+
+    // writes the current stick calibration values to memory
+    void writeStickCalToMem()
+    {
+        preferences.begin("AnalogCal", false);
+        uint16_t toSave;
+
+        toSave = stickCalVals.AXNeutch;
+        preferences.putUShort("AXNeutch", toSave);
+        toSave = stickCalVals.AXHigh;
+        preferences.putUShort("AXHigh", toSave);
+        toSave = stickCalVals.AXLow;
+        preferences.putUShort("AXLow", toSave);
+
+        toSave = stickCalVals.AYNeutch;
+        preferences.putUShort("AYNeutch", toSave);
+        toSave = stickCalVals.AYHigh;
+        preferences.putUShort("AYHigh", toSave);
+        toSave = stickCalVals.AYLow;
+        preferences.putUShort("AYLow", toSave);
+
+        toSave = stickCalVals.CXNeutch;
+        preferences.putUShort("CXNeutch", toSave);
+        toSave = stickCalVals.CXHigh;
+        preferences.putUShort("CXHigh", toSave);
+        toSave = stickCalVals.CXLow;
+        preferences.putUShort("CXLow", toSave);
+
+        toSave = stickCalVals.CYNeutch;
+        preferences.putUShort("CYNeutch", toSave);
+        toSave = stickCalVals.CYHigh;
+        preferences.putUShort("CYHigh", toSave);
+        toSave = CYLow;
+        preferences.putUShort("CYLow", toSave);
+
+        preferences.end();
+    }
+
+    // writes the current stick calibration values to memory
+    void writeStickDeadzonesToMem()
+    {
+        preferences.begin("AnalogDead", false);
+        uint16_t toSave;
+
+        toSave = AXDeadzone[0];
+        preferences.putUShort("AXDeadLow", toSave);
+        toSave = AXDeadzone[1];
+        preferences.putUShort("AXDeadHigh", toSave);
+        toSave = AXDeadzone[2];
+        preferences.putUShort("AXDeadVal", toSave);
+
+        toSave = AYDeadzone[0];
+        preferences.putUShort("AYDeadLow", toSave);
+        toSave = AYDeadzone[1];
+        preferences.putUShort("AYDeadHigh", toSave);
+        toSave = AYDeadzone[2];
+        preferences.putUShort("AYDeadVal", toSave);
+
+        toSave = CXDeadzone[0];
+        preferences.putUShort("CXDeadLow", toSave);
+        toSave = CXDeadzone[1];
+        preferences.putUShort("CXDeadHigh", toSave);
+        toSave = CXDeadzone[2];
+        preferences.putUShort("CXDeadVal", toSave);
+
+        toSave = CYDeadzone[0];
+        preferences.putUShort("CYDeadLow", toSave);
+        toSave = CYDeadzone[1];
+        preferences.putUShort("CYDeadHigh", toSave);
+        toSave = CYDeadzone[2];
+        preferences.putUShort("CYDeadVal", toSave);
+
+        preferences.end();
+    }
+    
+    // writes the current button mapping to memory
+    void writeButtonMappingToMem()
+    {
+        preferences.begin("DigitalMap", false);
+        uint16_t toSave;
+
+        toSave = digital_mapping[7];
+        preferences.putUShort("A", toSave);
+        toSave = digital_toggling[7];
+        preferences.putUShort("AT", toSave);
+
+        toSave = digital_mapping[6];
+        preferences.putUShort("B", toSave);
+        toSave = digital_toggling[6];
+        preferences.putUShort("BT", toSave);
+
+        toSave = digital_mapping[3];
+        preferences.putUShort("S", toSave);
+        toSave = digital_toggling[3];
+        preferences.putUShort("ST", toSave);
+
+        toSave = digital_mapping[5];
+        preferences.putUShort("X", toSave);
+        toSave = digital_toggling[5];
+        preferences.putUShort("XT", toSave);
+
+        toSave = digital_mapping[4];
+        preferences.putUShort("Y", toSave);
+        toSave = digital_toggling[4];
+        preferences.putUShort("YT", toSave);
+
+        toSave = digital_mapping[11];
+        preferences.putUShort("Z", toSave);
+        toSave = digital_toggling[11];
+        preferences.putUShort("ZT", toSave);
+
+        toSave = digital_mapping[9];
+        preferences.putUShort("L", toSave);
+        toSave = digital_toggling[9];
+        preferences.putUShort("LT", toSave);
+
+        toSave = digital_mapping[10];
+        preferences.putUShort("R", toSave);
+        toSave = digital_toggling[10];
+        preferences.putUShort("RT", toSave);
+
+        toSave = digital_mapping[12];
+        preferences.putUShort("u", toSave);
+        toSave = digital_toggling[12];
+        preferences.putUShort("uT", toSave);
+
+        toSave = digital_mapping[14];
+        preferences.putUShort("r", toSave);
+        toSave = digital_toggling[14];
+        preferences.putUShort("rT", toSave);
+
+        toSave = digital_mapping[13];
+        preferences.putUShort("d", toSave);
+        toSave = digital_toggling[13];
+        preferences.putUShort("dT", toSave);
+
+        toSave = digital_mapping[15];
+        preferences.putUShort("l", toSave);
+        toSave = digital_toggling[15];
+        preferences.putUShort("lT", toSave);
+
+        preferences.end();
+    }
+
+    void writeBLEpasswordToMem(String newPass)
+    {
+        preferences.begin("Passwords", false);
+        preferences.putString("BLEPass", newPass);
+        preferences.end();
+        BLEpassword = newPass;
+    }
+
+    // reads the stick calibration values from memory
+    void readStickDeadzonesFromMem()
+    {
+        preferences.begin("AnalogDead", true);
+
+        stickDeadzVals.AXDeadzone[0] = preferences.getUShort("AXDeadLow", 117);
+        stickDeadzVals.AXDeadzone[1] = preferences.getUShort("AXDeadHigh", 137);
+        stickDeadzVals.AXDeadzone[2] = preferences.getUShort("AXDeadVal", 127);
+
+        stickDeadzVals.AYDeadzone[0] = preferences.getUShort("AYDeadLow", 117);
+        stickDeadzVals.AYDeadzone[1] = preferences.getUShort("AYDeadHigh", 137);
+        stickDeadzVals.AYDeadzone[2] = preferences.getUShort("AYDeadVal", 127);
+
+        stickDeadzVals.CXDeadzone[0] = preferences.getUShort("CXDeadLow", 117);
+        stickDeadzVals.CXDeadzone[1] = preferences.getUShort("CXDeadHigh", 137);
+        stickDeadzVals.CXDeadzone[2] = preferences.getUShort("CXDeadVal", 127);
+
+        stickDeadzVals.CYDeadzone[0] = preferences.getUShort("CYDeadLow", 117);
+        stickDeadzVals.CYDeadzone[1] = preferences.getUShort("CYDeadHigh", 137);
+        stickDeadzVals.CYDeadzone[2] = preferences.getUShort("CYDeadVal", 127);
+
+        preferences.end();
+    }
+
+    // reads the stick calibration values from memory
+    void readStickCalFromMem()
+    {
+        preferences.begin("AnalogCal", true);
+
+        stickCalVals.AXNeutch = preferences.getUShort("AXNeutch", 0); // if key not there default to 0
+        stickCalVals.AXHigh = preferences.getUShort("AXHigh", 0);
+        stickCalVals.AXLow = preferences.getUShort("AXLow", 0);
+
+        stickCalVals.AYNeutch = preferences.getUShort("AYNeutch", 0);
+        stickCalVals.AYHigh = preferences.getUShort("AYHigh", 0);
+        stickCalVals.AYLow = preferences.getUShort("AYLow", 0);
+
+        stickCalVals.CXNeutch = preferences.getUShort("CXNeutch", 0);
+        stickCalVals.CXHigh = preferences.getUShort("CXHigh", 0);
+        stickCalVals.CXLow = preferences.getUShort("CXLow", 0);
+
+        stickCalVals.CYNeutch = preferences.getUShort("CYNeutch", 0);
+        stickCalVals.CYHigh = preferences.getUShort("CYHigh", 0);
+        stickCalVals.CYLow = preferences.getUShort("CYLow", 0);
+
+        preferences.end();
+    }
+
+    //  0  0  0 Start Y  X   B   A   1   L  R   Z   D-U  D-D  D-R  D-L
+    //{-1,-1,-1, 21,  4, 18, 23, 22, -1, 5, 19, 15, 32,  25,  33,  14};
+    void readButtonMappingFromMem()
+    {
+        preferences.begin("DigitalMap", true);
+
+        digital_mapping[7] = preferences.getUShort("A", 22);
+        digital_toggling[7] = preferences.getUShort("AT", 1);
+
+        digital_mapping[6] = preferences.getUShort("B", 23);
+        digital_toggling[6] = preferences.getUShort("BT", 1);
+
+        digital_mapping[3] = preferences.getUShort("S", 21);
+        digital_toggling[3] = preferences.getUShort("ST", 1);
+
+        digital_mapping[5] = preferences.getUShort("X", 18);
+        digital_toggling[5] = preferences.getUShort("XT", 1);
+
+        digital_mapping[4] = preferences.getUShort("Y", 4);
+        digital_toggling[4] = preferences.getUShort("YT", 1);
+
+        digital_mapping[11] = preferences.getUShort("Z", 15);
+        digital_toggling[11] = preferences.getUShort("ZT", 1);
+
+        digital_mapping[9] = preferences.getUShort("L", 5);
+        digital_toggling[9] = preferences.getUShort("LT", 1);
+
+        digital_mapping[10] = preferences.getUShort("R", 19);
+        digital_toggling[10] = preferences.getUShort("RT", 1);
+
+        digital_mapping[12] = preferences.getUShort("u", 32);
+        digital_toggling[12] = preferences.getUShort("uT", 1);
+
+        digital_mapping[14] = preferences.getUShort("r", 33);
+        digital_toggling[14] = preferences.getUShort("rT", 1);
+
+        digital_mapping[13] = preferences.getUShort("d", 25);
+        digital_toggling[13] = preferences.getUShort("dT", 1);
+
+        digital_mapping[15] = preferences.getUShort("l", 14);
+        digital_toggling[15] = preferences.getUShort("lT", 1);
+
+        preferences.end();
+
+        updateDigitalInputPins();
+    }
+
+    void readBLEpasswordFromMem()
+    {
+        preferences.begin("Passwords", true);
+        BLEpassword = preferences.getString("BLEPass", "KEG CONCH");
+        preferences.end();
+    }
+
+    void swap_buttons(int ind1, int ind2)
+    {
+        int temp = digital_input_pins[ind1];
+        digital_input_pins[ind1] = digital_input_pins[ind2];
+        digital_input_pins[ind2] = temp;
+    }
+
+    // updates digital inputs with their currently mapped values
+    void updateDigitalInputPins()
+    {
+        for (int i = 0; i < DigitalInLen; i++)
+        {
+            if (digital_toggling[i] == 0)
+            {
+                digital_input_pins[i] = -1;
+            }
+            else
+            {
+                digital_input_pins[i] = digital_mapping[i];
+            }
+        }
+    }
+
+    // rename to updateButtonMapping(String btn_mapping_str)?
+    // parses the button mapping string and updates the pins
+    void ParseButtonMappingString(String str)
+    {
+        int pin;
+        int toggle;
+        String read_val_1;
+        String read_val_2;
+
+        read_val_1 = str.substring(0, 1);
+        read_val_2 = str.substring(1, 2);
+        pin = getPinFromChar(read_val_1);
+        toggle = getToggleFromChar(read_val_2);
+        digital_mapping[7] = pin;
+        digital_toggling[7] = toggle;
+
+        read_val_1 = str.substring(3, 4);
+        read_val_2 = str.substring(4, 5);
+        pin = getPinFromChar(read_val_1);
+        toggle = getToggleFromChar(read_val_2);
+        digital_mapping[6] = pin;
+        digital_toggling[6] = toggle;
+
+        read_val_1 = str.substring(6, 7);
+        read_val_2 = str.substring(7, 8);
+        pin = getPinFromChar(read_val_1);
+        toggle = getToggleFromChar(read_val_2);
+        digital_mapping[3] = pin;
+        digital_toggling[3] = toggle;
+
+        read_val_1 = str.substring(9, 10);
+        read_val_2 = str.substring(10, 11);
+        pin = getPinFromChar(read_val_1);
+        toggle = getToggleFromChar(read_val_2);
+        digital_mapping[5] = pin;
+        digital_toggling[5] = toggle;
+
+        read_val_1 = str.substring(12, 13);
+        read_val_2 = str.substring(13, 14);
+        pin = getPinFromChar(read_val_1);
+        toggle = getToggleFromChar(read_val_2);
+        digital_mapping[4] = pin;
+        digital_toggling[4] = toggle;
+
+        read_val_1 = str.substring(15, 16);
+        read_val_2 = str.substring(16, 17);
+        pin = getPinFromChar(read_val_1);
+        toggle = getToggleFromChar(read_val_2);
+        digital_mapping[11] = pin;
+        digital_toggling[11] = toggle;
+
+        read_val_1 = str.substring(18, 19);
+        read_val_2 = str.substring(19, 20);
+        pin = getPinFromChar(read_val_1);
+        toggle = getToggleFromChar(read_val_2);
+        digital_mapping[9] = pin;
+        digital_toggling[9] = toggle;
+
+        read_val_1 = str.substring(21, 22);
+        read_val_2 = str.substring(22, 23);
+        pin = getPinFromChar(read_val_1);
+        toggle = getToggleFromChar(read_val_2);
+        digital_mapping[10] = pin;
+        digital_toggling[10] = toggle;
+
+        read_val_1 = str.substring(24, 25);
+        read_val_2 = str.substring(25, 26);
+        pin = getPinFromChar(read_val_1);
+        toggle = getToggleFromChar(read_val_2);
+        digital_mapping[12] = pin;
+        digital_toggling[12] = toggle;
+
+        read_val_1 = str.substring(27, 28);
+        read_val_2 = str.substring(28, 29);
+        pin = getPinFromChar(read_val_1);
+        toggle = getToggleFromChar(read_val_2);
+        digital_mapping[14] = pin;
+        digital_toggling[14] = toggle;
+
+        read_val_1 = str.substring(30, 31);
+        read_val_2 = str.substring(31, 32);
+        pin = getPinFromChar(read_val_1);
+        toggle = getToggleFromChar(read_val_2);
+        digital_mapping[13] = pin;
+        digital_toggling[13] = toggle;
+
+        read_val_1 = str.substring(33, 34);
+        read_val_2 = str.substring(34, 35);
+        pin = getPinFromChar(read_val_1);
+        toggle = getToggleFromChar(read_val_2);
+        digital_mapping[15] = pin;
+        digital_toggling[15] = toggle;
+
+        updateDigitalInputPins();
+    }
+
     // parses the calibration string and fills the stick calibration struct with the new values.
     // New values stored in struct but not saved to memory unless user chooses to
-    void ParseCalibrationString(String str, )
+    void ParseCalibrationString(String str )
     {
         stickCalVals.AXNeutch = str.substring(0, 4).toInt();
         stickCalVals.AXLow = str.substring(5, 9).toInt();
@@ -546,379 +1101,116 @@ private:
         }
     }
 
-    /* Writes */
-
-    // writes the current stick calibration values to memory
-    void writeStickCalToMem()
+    void setupBLE()
     {
-        preferences.begin("AnalogCal", false);
-        uint16_t toSave;
-
-        toSave = AXNeutch;
-        preferences.putUShort("AXNeutch", toSave);
-        toSave = AXHigh;
-        preferences.putUShort("AXHigh", toSave);
-        toSave = AXLow;
-        preferences.putUShort("AXLow", toSave);
-
-        toSave = AYNeutch;
-        preferences.putUShort("AYNeutch", toSave);
-        toSave = AYHigh;
-        preferences.putUShort("AYHigh", toSave);
-        toSave = AYLow;
-        preferences.putUShort("AYLow", toSave);
-
-        toSave = CXNeutch;
-        preferences.putUShort("CXNeutch", toSave);
-        toSave = CXHigh;
-        preferences.putUShort("CXHigh", toSave);
-        toSave = CXLow;
-        preferences.putUShort("CXLow", toSave);
-
-        toSave = CYNeutch;
-        preferences.putUShort("CYNeutch", toSave);
-        toSave = CYHigh;
-        preferences.putUShort("CYHigh", toSave);
-        toSave = CYLow;
-        preferences.putUShort("CYLow", toSave);
-
-        preferences.end();
+        BLEDevice::init(bleServerName);
+        
+        // Create the BLE Server
+        BLEServer *pServer = BLEDevice::createServer();
+        pServer->setCallbacks(new MyServerCallbacks());
+        
+        // Create the BLE Service
+        BLEService *Service1 = pServer->createService(SERVICE_UUID);
+        Service1->addCharacteristic(&Ch1);
+        Service1->addCharacteristic(&Ch2);
+        Ch1.addDescriptor(&Dp1);
+        
+        // because one-liner
+        if (resetPasswordFlag == 1) Ch1.setValue("Reset Password"); else Ch1.setValue("Password Incorrect");
+   
+        Ch2.addDescriptor(&Dp2);
+        Ch2.setValue("Waiting for change to exactly: A");
+        
+        // Start advertising
+        Service1->start();
+        BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+        pAdvertising->addServiceUUID(SERVICE_UUID);
+        pServer->getAdvertising()->start();
+        bt_millis_count = millis();
     }
 
-
-    // writes the current stick calibration values to memory
-    void writeStickDeadzonesToMem()
-    {
-        preferences.begin("AnalogDead", false);
-        uint16_t toSave;
-
-        toSave = AXDeadzone[0];
-        preferences.putUShort("AXDeadLow", toSave);
-        toSave = AXDeadzone[1];
-        preferences.putUShort("AXDeadHigh", toSave);
-        toSave = AXDeadzone[2];
-        preferences.putUShort("AXDeadVal", toSave);
-
-        toSave = AYDeadzone[0];
-        preferences.putUShort("AYDeadLow", toSave);
-        toSave = AYDeadzone[1];
-        preferences.putUShort("AYDeadHigh", toSave);
-        toSave = AYDeadzone[2];
-        preferences.putUShort("AYDeadVal", toSave);
-
-        toSave = CXDeadzone[0];
-        preferences.putUShort("CXDeadLow", toSave);
-        toSave = CXDeadzone[1];
-        preferences.putUShort("CXDeadHigh", toSave);
-        toSave = CXDeadzone[2];
-        preferences.putUShort("CXDeadVal", toSave);
-
-        toSave = CYDeadzone[0];
-        preferences.putUShort("CYDeadLow", toSave);
-        toSave = CYDeadzone[1];
-        preferences.putUShort("CYDeadHigh", toSave);
-        toSave = CYDeadzone[2];
-        preferences.putUShort("CYDeadVal", toSave);
-
-        preferences.end();
-    }
-    
-    // writes the current button mapping to memory
-    void writeButtonMappingToMem()
-    {
-        preferences.begin("DigitalMap", false);
-        uint16_t toSave;
-
-        toSave = digital_mapping[7];
-        preferences.putUShort("A", toSave);
-        toSave = digital_toggling[7];
-        preferences.putUShort("AT", toSave);
-
-        toSave = digital_mapping[6];
-        preferences.putUShort("B", toSave);
-        toSave = digital_toggling[6];
-        preferences.putUShort("BT", toSave);
-
-        toSave = digital_mapping[3];
-        preferences.putUShort("S", toSave);
-        toSave = digital_toggling[3];
-        preferences.putUShort("ST", toSave);
-
-        toSave = digital_mapping[5];
-        preferences.putUShort("X", toSave);
-        toSave = digital_toggling[5];
-        preferences.putUShort("XT", toSave);
-
-        toSave = digital_mapping[4];
-        preferences.putUShort("Y", toSave);
-        toSave = digital_toggling[4];
-        preferences.putUShort("YT", toSave);
-
-        toSave = digital_mapping[11];
-        preferences.putUShort("Z", toSave);
-        toSave = digital_toggling[11];
-        preferences.putUShort("ZT", toSave);
-
-        toSave = digital_mapping[9];
-        preferences.putUShort("L", toSave);
-        toSave = digital_toggling[9];
-        preferences.putUShort("LT", toSave);
-
-        toSave = digital_mapping[10];
-        preferences.putUShort("R", toSave);
-        toSave = digital_toggling[10];
-        preferences.putUShort("RT", toSave);
-
-        toSave = digital_mapping[12];
-        preferences.putUShort("u", toSave);
-        toSave = digital_toggling[12];
-        preferences.putUShort("uT", toSave);
-
-        toSave = digital_mapping[14];
-        preferences.putUShort("r", toSave);
-        toSave = digital_toggling[14];
-        preferences.putUShort("rT", toSave);
-
-        toSave = digital_mapping[13];
-        preferences.putUShort("d", toSave);
-        toSave = digital_toggling[13];
-        preferences.putUShort("dT", toSave);
-
-        toSave = digital_mapping[15];
-        preferences.putUShort("l", toSave);
-        toSave = digital_toggling[15];
-        preferences.putUShort("lT", toSave);
-
-        preferences.end();
-    }
-
-
-    void writeBLEpasswordToMem(String newPass)
-    {
-        preferences.begin("Passwords", false);
-        preferences.putString("BLEPass", newPass);
-        preferences.end();
-        BLEpassword = newPass;
-    }
-
-    // reads the stick calibration values from memory
-    void readStickDeadzonesFromMem()
-    {
-        preferences.begin("AnalogDead", true);
-
-        stickDeadzVals.AXDeadzone[0] = preferences.getUShort("AXDeadLow", 117);
-        stickDeadzVals.AXDeadzone[1] = preferences.getUShort("AXDeadHigh", 137);
-        stickDeadzVals.AXDeadzone[2] = preferences.getUShort("AXDeadVal", 127);
-
-        stickDeadzVals.AYDeadzone[0] = preferences.getUShort("AYDeadLow", 117);
-        stickDeadzVals.AYDeadzone[1] = preferences.getUShort("AYDeadHigh", 137);
-        stickDeadzVals.AYDeadzone[2] = preferences.getUShort("AYDeadVal", 127);
-
-        stickDeadzVals.CXDeadzone[0] = preferences.getUShort("CXDeadLow", 117);
-        stickDeadzVals.CXDeadzone[1] = preferences.getUShort("CXDeadHigh", 137);
-        stickDeadzVals.CXDeadzone[2] = preferences.getUShort("CXDeadVal", 127);
-
-        stickDeadzVals.CYDeadzone[0] = preferences.getUShort("CYDeadLow", 117);
-        stickDeadzVals.CYDeadzone[1] = preferences.getUShort("CYDeadHigh", 137);
-        stickDeadzVals.CYDeadzone[2] = preferences.getUShort("CYDeadVal", 127);
-
-        preferences.end();
-    }
-
-    // reads the stick halibration values from memory
-    void readStickCalFromMem()
-    {
-        preferences.begin("AnalogCal", true);
-
-        stickCalVals.AXNeutch = preferences.getUShort("AXNeutch", 0); // if key not there default to 0
-        stickCalVals.AXHigh = preferences.getUShort("AXHigh", 0);
-        stickCalVals.AXLow = preferences.getUShort("AXLow", 0);
-
-        stickCalVals.AYNeutch = preferences.getUShort("AYNeutch", 0);
-        stickCalVals.AYHigh = preferences.getUShort("AYHigh", 0);
-        stickCalVals.AYLow = preferences.getUShort("AYLow", 0);
-
-        stickCalVals.CXNeutch = preferences.getUShort("CXNeutch", 0);
-        stickCalVals.CXHigh = preferences.getUShort("CXHigh", 0);
-        stickCalVals.CXLow = preferences.getUShort("CXLow", 0);
-
-        stickCalVals.CYNeutch = preferences.getUShort("CYNeutch", 0);
-        stickCalVals.CYHigh = preferences.getUShort("CYHigh", 0);
-        stickCalVals.CYLow = preferences.getUShort("CYLow", 0);
-
-        preferences.end();
-    }
-
-    // 0 0 0 Start Y X B A 1 L R Z D-U D-D D-R D-L
-    //{-1,-1,-1,21,4,18,23,22,-1,5,19,15,32,25,33,14};
-    void readButtonMappingFromMem()
-    {
-        preferences.begin("DigitalMap", true);
-
-        digital_mapping[7] = preferences.getUShort("A", 22);
-        digital_toggling[7] = preferences.getUShort("AT", 1);
-
-        digital_mapping[6] = preferences.getUShort("B", 23);
-        digital_toggling[6] = preferences.getUShort("BT", 1);
-
-        digital_mapping[3] = preferences.getUShort("S", 21);
-        digital_toggling[3] = preferences.getUShort("ST", 1);
-
-        digital_mapping[5] = preferences.getUShort("X", 18);
-        digital_toggling[5] = preferences.getUShort("XT", 1);
-
-        digital_mapping[4] = preferences.getUShort("Y", 4);
-        digital_toggling[4] = preferences.getUShort("YT", 1);
-
-        digital_mapping[11] = preferences.getUShort("Z", 15);
-        digital_toggling[11] = preferences.getUShort("ZT", 1);
-
-        digital_mapping[9] = preferences.getUShort("L", 5);
-        digital_toggling[9] = preferences.getUShort("LT", 1);
-
-        digital_mapping[10] = preferences.getUShort("R", 19);
-        digital_toggling[10] = preferences.getUShort("RT", 1);
-
-        digital_mapping[12] = preferences.getUShort("u", 32);
-        digital_toggling[12] = preferences.getUShort("uT", 1);
-
-        digital_mapping[14] = preferences.getUShort("r", 33);
-        digital_toggling[14] = preferences.getUShort("rT", 1);
-
-        digital_mapping[13] = preferences.getUShort("d", 25);
-        digital_toggling[13] = preferences.getUShort("dT", 1);
-
-        digital_mapping[15] = preferences.getUShort("l", 14);
-        digital_toggling[15] = preferences.getUShort("lT", 1);
-
-        preferences.end();
-
-        updateDigitalInputPins();
-    }
-
-    void readBLEpasswordFromMem()
-    {
-        preferences.begin("Passwords", true);
-        BLEpassword = preferences.getString("BLEPass", "KEG CONCH");
-        preferences.end();
-    }
-
-    void swap_buttons(int ind1, int ind2)
-    {
-        int temp = digital_input_pins[ind1];
-        digital_input_pins[ind1] = digital_input_pins[ind2];
-        digital_input_pins[ind2] = temp;
-    }
-
-    // updates digital inputs with their currently mapped values
-    void updateDigitalInputPins()
-    {
-        for (int i = 0; i < DigitalInLen; i++)
-        {
-            if (digital_toggling[i] == 0)
-            {
-                digital_input_pins[i] = -1;
-            }
-            else
-            {
-                digital_input_pins[i] = digital_mapping[i];
-            }
-        }
-    }
-
-    // rename to updateButtonMapping(String btn_mapping_str)
-    void ParseButtonMappingString(String str)
-    {
-        int pin;
-        int toggle;
-        String read_val_1;
-        String read_val_2;
-
-        read_val_1 = str.substring(0, 1);
-        read_val_2 = str.substring(1, 2);
-        pin = getPinFromChar(read_val_1);
-        toggle = getToggleFromChar(read_val_2);
-        digital_mapping[7] = pin;
-        digital_toggling[7] = toggle;
-
-        read_val_1 = str.substring(3, 4);
-        read_val_2 = str.substring(4, 5);
-        pin = getPinFromChar(read_val_1);
-        toggle = getToggleFromChar(read_val_2);
-        digital_mapping[6] = pin;
-        digital_toggling[6] = toggle;
-
-        read_val_1 = str.substring(6, 7);
-        read_val_2 = str.substring(7, 8);
-        pin = getPinFromChar(read_val_1);
-        toggle = getToggleFromChar(read_val_2);
-        digital_mapping[3] = pin;
-        digital_toggling[3] = toggle;
-
-        read_val_1 = str.substring(9, 10);
-        read_val_2 = str.substring(10, 11);
-        pin = getPinFromChar(read_val_1);
-        toggle = getToggleFromChar(read_val_2);
-        digital_mapping[5] = pin;
-        digital_toggling[5] = toggle;
-
-        read_val_1 = str.substring(12, 13);
-        read_val_2 = str.substring(13, 14);
-        pin = getPinFromChar(read_val_1);
-        toggle = getToggleFromChar(read_val_2);
-        digital_mapping[4] = pin;
-        digital_toggling[4] = toggle;
-
-        read_val_1 = str.substring(15, 16);
-        read_val_2 = str.substring(16, 17);
-        pin = getPinFromChar(read_val_1);
-        toggle = getToggleFromChar(read_val_2);
-        digital_mapping[11] = pin;
-        digital_toggling[11] = toggle;
-
-        read_val_1 = str.substring(18, 19);
-        read_val_2 = str.substring(19, 20);
-        pin = getPinFromChar(read_val_1);
-        toggle = getToggleFromChar(read_val_2);
-        digital_mapping[9] = pin;
-        digital_toggling[9] = toggle;
-
-        read_val_1 = str.substring(21, 22);
-        read_val_2 = str.substring(22, 23);
-        pin = getPinFromChar(read_val_1);
-        toggle = getToggleFromChar(read_val_2);
-        digital_mapping[10] = pin;
-        digital_toggling[10] = toggle;
-
-        read_val_1 = str.substring(24, 25);
-        read_val_2 = str.substring(25, 26);
-        pin = getPinFromChar(read_val_1);
-        toggle = getToggleFromChar(read_val_2);
-        digital_mapping[12] = pin;
-        digital_toggling[12] = toggle;
-
-        read_val_1 = str.substring(27, 28);
-        read_val_2 = str.substring(28, 29);
-        pin = getPinFromChar(read_val_1);
-        toggle = getToggleFromChar(read_val_2);
-        digital_mapping[14] = pin;
-        digital_toggling[14] = toggle;
-
-        read_val_1 = str.substring(30, 31);
-        read_val_2 = str.substring(31, 32);
-        pin = getPinFromChar(read_val_1);
-        toggle = getToggleFromChar(read_val_2);
-        digital_mapping[13] = pin;
-        digital_toggling[13] = toggle;
-
-        read_val_1 = str.substring(33, 34);
-        read_val_2 = str.substring(34, 35);
-        pin = getPinFromChar(read_val_1);
-        toggle = getToggleFromChar(read_val_2);
-        digital_mapping[15] = pin;
-        digital_toggling[15] = toggle;
-
-        updateDigitalInputPins();
-    }
 };
 
+
+
+// Utils Methods
+
+// get a strange insertion of -1 into some of the read data
+// this function looks through the buffer holder and removes any single -1 that is present
+// it then shifts the rest of the values into place
+// think the -1 is when it reads but there is no data available, which seems like it should never be possible but we'll keep that on the backburner
+void cleanUpBufferRead(int &buffer[], int &buffer_index)
+{
+	int j = -1;
+	for (int i = 0; i < len; i++)
+	{
+		if (buffer[i] == -1)
+		{
+			j = i;
+            // Q: break here?
+		}
+	}
+	if (j != -1)
+	{
+		for (int i = j; i < len - 1; i++)
+		{
+			buffer[i] = buffer[i + 1];
+		}
+		buffer_index -= 1;
+	}
+}
+
+// read all values in the input buffer into a dump variable
+void Clear_UART_Rx()
+{
+    int dump;
+	while (true)
+	{
+		if (Serial2.available())
+		{
+			dump = Serial2.read();
+			if (dump == 63) // NOTE: make this readable
+			{
+				break;
+			}
+		}
+	}
+}
+
+// writes data over 6 bit uart line serial 2
+// Absolutely crucial that this function have the portENTER_CRITICAL_ISR wrapping the serial writes
+// this solved the "start" bug as it seems something was interupting the serial writes
+void writeData(int dat[], int len)
+{
+	portENTER_CRITICAL_ISR(&timerMux);
+	for (int i = 0; i < len; i++)
+	{
+		Serial2.write(dat[i]);
+	}
+	portEXIT_CRITICAL_ISR(&timerMux);
+}
+
+// prints the contents of array arr to the serial monitor
+void printArr(int arr[], int len)
+{
+	for (int i = 0; i < len; i++)
+	{
+		Serial.println(arr[i]);
+	}
+}
+
+// prints the contents of an char array arr to the serial monitor
+void printCharArr(char arr[], int len)
+{
+	for (int i = 0; i < len; i++)
+	{
+		Serial.print(arr[i]);
+	}
+	Serial.println();
+}
+
+int charToInt(char c)
+{
+	int ret = c - '0';
+	return ret;
+}

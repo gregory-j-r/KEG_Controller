@@ -1,10 +1,14 @@
-#include <string.h>
+// #include <string.h>
 
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <Update.h>
+
+
+char ipAddy[16];
+int wifi_flag = 0;
 
 void wifiUploadEnabled(String Message)
 {
