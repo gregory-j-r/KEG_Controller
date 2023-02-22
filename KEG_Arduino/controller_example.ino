@@ -207,6 +207,36 @@ struct pair_hash {
     }
 };
 
+void eraseOTA(){
+  const esp_partition_t *partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "otadata");
+  assert(partition != NULL);
+
+  static char store_data[] = "ESP-IDF Partition Operations Example (Read, Erase, Write)";
+  static char read_data[sizeof(store_data)];
+
+  // Erase entire partition
+  memset(read_data, 0xFF, sizeof(read_data));
+  ESP_ERROR_CHECK(esp_partition_erase_range(partition, 0, partition->size));
+
+  // Write the data, starting from the beginning of the partition
+  ESP_ERROR_CHECK(esp_partition_write(partition, 0, store_data, sizeof(store_data)));
+  ESP_LOGI(TAG, "Written data: %s", store_data);
+
+  // Read back the data, checking that read data and written data match
+  ESP_ERROR_CHECK(esp_partition_read(partition, 0, read_data, sizeof(read_data)));
+  assert(memcmp(store_data, read_data, sizeof(read_data)) == 0);
+  ESP_LOGI(TAG, "Read data: %s", read_data);
+
+  // Erase the area where the data was written. Erase size shoud be a multiple of SPI_FLASH_SEC_SIZE
+  // and also be SPI_FLASH_SEC_SIZE aligned
+  ESP_ERROR_CHECK(esp_partition_erase_range(partition, 0, SPI_FLASH_SEC_SIZE));
+
+  // Read back the data (should all now be 0xFF's)
+  memset(store_data, 0xFF, sizeof(read_data));
+  ESP_ERROR_CHECK(esp_partition_read(partition, 0, read_data, sizeof(read_data)));
+  assert(memcmp(store_data, read_data, sizeof(read_data)) == 0);
+}
+
 char getCharFromToggle(int toggle)
 {
     char char_out;
@@ -284,6 +314,128 @@ int mapStickVals(int calVals[], int dead[], int value){
     return mapped;
 }
 
+void wifiUploadEnabled(String Message)
+{
+	char *token;
+	char *mystring = (char *)Message.c_str();
+	const char *delimiter = "/";
+	int i = 0;
+	char *ssid;
+	char *password;
+	ipAddy[0] = 'N';
+	ipAddy[1] = 'O';
+
+	token = strtok(mystring, delimiter);
+	while (token != NULL)
+	{
+		//      Serial.println(token);
+		switch (i)
+		{
+		case 1:
+			ssid = token;
+			break;
+		case 2:
+			password = token;
+			break;
+		}
+		token = strtok(NULL, delimiter);
+		i++;
+	}
+
+	Serial.print("ssid = ");
+	Serial.println(ssid);
+	Serial.print("password = ");
+	Serial.println(password);
+	Serial.println();
+	// Start Wifi setup
+	// Connect to WiFi network
+	WiFi.begin(ssid, password);
+	Serial.println("");
+
+	i = 0;
+	// Wait for connection
+	while (WiFi.status() != WL_CONNECTED)
+	{
+		delay(500);
+		Serial.print(".");
+		i++;
+		if (i >= 100)
+		{
+			break;
+		}
+	}
+
+	if (i < 100)
+	{
+		Serial.println("");
+		Serial.print("Connected to ");
+		Serial.println(ssid);
+		Serial.print("IP address: ");
+		Serial.println(WiFi.localIP());
+
+		/*use mdns for host name resolution*/
+		if (!MDNS.begin(host))
+		{ // http://esp32.local
+			Serial.println("Error setting up MDNS responder!");
+			while (1)
+			{
+				delay(1000);
+			}
+		}
+		Serial.println("mDNS responder started");
+		/*return index page which is stored in serverIndex */
+		server.on("/", HTTP_GET, []()
+				  {
+      server.sendHeader("Connection", "close");
+      server.send(200, "text/html", loginIndex); });
+		server.on("/serverIndex", HTTP_GET, []()
+				  {
+      server.sendHeader("Connection", "close");
+      server.send(200, "text/html", serverIndex); });
+		/*handling uploading firmware file */
+		server.on(
+			"/update", HTTP_POST, []()
+			{
+      server.sendHeader("Connection", "close");
+      server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+      ESP.restart(); },
+			[]()
+			{
+				HTTPUpload &upload = server.upload();
+				if (upload.status == UPLOAD_FILE_START)
+				{
+					Serial.printf("Update: %s\n", upload.filename.c_str());
+					if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+					{ // start with max available size
+						Update.printError(Serial);
+					}
+				}
+				else if (upload.status == UPLOAD_FILE_WRITE)
+				{
+					/* flashing firmware to ESP*/
+					if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
+					{
+						Update.printError(Serial);
+					}
+				}
+				else if (upload.status == UPLOAD_FILE_END)
+				{
+					if (Update.end(true))
+					{ // true to set the size to the current progress
+						Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+					}
+					else
+					{
+						Update.printError(Serial);
+					}
+				}
+			});
+		server.begin();
+		wifi_flag = 1;
+		WiFi.localIP().toString().toCharArray(ipAddy, 15);
+	}	
+}
+
 // get a strange insertion of -1 into some of the read data
 // this function looks through the buffer holder and removes any single -1 that is present
 // it then shifts the rest of the values into place
@@ -296,7 +448,7 @@ void cleanUpBufferRead(int (&buffer)[BufferHolderLen], int &buffer_index)
         if (buffer[i] == -1)
         {
             j = i;
-            // Q: break here?
+            break;
         }
     }
     if (j != -1)
@@ -381,9 +533,6 @@ public:
     {
         setPinsToPullup(); // set the pins to input_pullup mode
         
-        // probably don't need, already initialized to 0
-        // fill_buff_hold();
-
         readStickCalFromMem();       // read the stick calibration values from memory
         readStickDeadzonesFromMem(); // read the stick deadzone values from memory
         readButtonMappingFromMem();  // read button mapping from memory
@@ -401,9 +550,14 @@ public:
         // check to see if holding down x and y on boot
         // if yes set the reset password flag
         // allows users to change old passwords without knowing current password
-        if (!digitalRead(charToPinMap['x']) && !digitalRead(charToPinMap['y']))
+        if (!digitalRead(charToPinMap['X']) && !digitalRead(charToPinMap['Y']))
         {
             resetPasswordFlag = 1;
+        }
+
+        if(!digitalRead(charToPinMap['Y']) && !digitalRead(charToPinMap6['d'])){
+            eraseOTA();
+            delay(1000);
         }
 
         setupBLE();
@@ -420,10 +574,11 @@ public:
 
         Serial2.begin(800000, SERIAL_6N1, RXD2, TXD2);
         Serial2.setRxBufferSize(256);
-    };
+    }
 
     /**
-     * @brief main controller loop
+     * @brief main controller loop. This does one iteration of the loop so it can be called in 
+     *  the arduino loop function.
      */
     void loop()
     {
@@ -572,6 +727,18 @@ private:
     };
 
     /**
+     * @brief enum to index each button in the buttons_in/digital_pins arrays. Similarly the 
+    */
+    enum PinIndex{
+        START = 3,
+        Y = 4,  X = 5,
+        B = 6, A = 7,
+        L = 9, R = 10, 
+        Z = 11, DU = 12,
+        DD = 13, DR = 14, DL = 15
+    };
+
+    /**
      * @brief map to convert from two bits to the equivalent hex message
     */
     std::unordered_map<std::pair<int, int>, int, pair_hash> twoBitsToMessage =
@@ -582,57 +749,58 @@ private:
           {std::make_pair(1,0), OneZero}
         }};
 
-    /**
-     * @brief enum to index each button in the buttons_in/digital_pins arrays. Similarly the 
+    /** 
+     * @brief Maps index in the button mapping string to the corresponding buttons. Each pair of indices
+     *        3k, 3k+1 are for a different button
     */
-    enum PinIndex{
-        START = 3,
-        Y = 4,
-        X = 5,
-        B = 6,
-        A = 7,
-        L = 9,
-        R = 10,
-        Z = 11,
-        DU = 12,
-        DD = 13,
-        DR = 14,
-        DL = 15
-    };
-
-    // maps chars in the button mapping string to their corresponding buttons. Each pair of indices 3k, 3k+1
-    // are for a different button
     std::unordered_map<int,int> buttonMappingMap = {{0, A}, {3, B}, {6, START},
                                                     {9, X}, {12, Y}, {15, Z},
                                                     {18, L}, {21, R}, {24, DU},
                                                     {27, DR}, {30, DD}, {33, DL}};
 
-    // Maps for pin <--> char conversion
+    /**
+     * @brief LUT's for the original pin to button mapping
+     *        this
+    */
     std::unordered_map<int, char> pinToCharMap = {{22, 'A'}, {23, 'B'}, {21, 'S'}, {18, 'X'}, {4, 'Y'}, {15, 'Z'},
                                     {5, 'L'}, {19, 'R'}, {32, 'u'}, {33, 'r'}, {25, 'd'}, {14, 'l'}};
     
     std::unordered_map<char,int> charToPinMap = {{'A', 22}, {'B', 23}, {'S', 21}, {'X', 18}, {'Y', 4}, {'Z', 15},
                                 {'L', 5}, {'R', 19}, {'u', 32}, {'r', 33}, {'d', 25}, {'l', 14}};
 
-    // NOTE: enums to index these arrays? Gives names to random indexes floating around
-    // Arrays holding pins of each digital and analog input
-    int digital_pins[DigitalInLen] = {-1, -1, -1, 21, 4, 18, 23, 22, -1, 5, 19, 15, 32, 25, 33, 14}; // should save pin 2 to use for rumble (it's connected to the onboard LED), pin 2 on the devboard is attatched to a pull down resistor, Note gpio5 is connected to a pull up resistor
-
-    // Q: what is/was this for?
-    // int analog_input_pins[AnalogInLen] = {34, 39, 35, 13, 26, 27};                                         // maybe change 12 for 36 (aka vp) or 39 (aka vn) as 12 needs to be low during boot but currently is not??
-
-    // Arrays to hold current digital toggling and mapping of buttons
-    int digital_mapping[DigitalInLen] = {-1, -1, -1, 21, 4, 18, 23, 22, -1, 5, 19, 15, 32, 25, 33, 14};
-    int digital_toggling[DigitalInLen] = {0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1};
-
-    // Arrays to hold digital and analog inputs from controller
-    // 0 0 0 Start Y X B A 1 L R Z D-U D-D D-R D-L
-    // Analog-X Analog-Y C-Stick-X C-Stick-Y L-Trigger R-Trigger
+    /**
+     * @brief Arrays to hold digital and analog inputs from controller
+     * 
+     * @note The formatting for these arrays:
+     * 
+     *        buttons_in = [0, 0, 0, Start, Y, X, B, A, 1, L, R, Z, D-U, D-D, D-R, D-L]
+     *        analogs_in = [Analog-X, Analog-Y, C-Stick-X, C-Stick-Y, L-Trigger, R-Trigger[]
+    */
     int buttons_in[DigitalInLen] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0};
     int analogs_in[AnalogInLen] = {128, 128, 128, 128, 0, 0};
 
-    // Arrays for replies
-    // InGameReply uses buttons_in and analogs_in to fill
+
+    /**
+     * @brief Array to hold digital pins for each button. This will be updated with the pins from
+     *        the current mapping.
+     * 
+     * @note  Should save pin 2 to use for rumble (it's connected to the onboard LED).
+     *        Pin 2 on the devboard is attatched to a pull down resistor, and note that
+     *        gpio5 is connected to a pull up resistor
+    */
+    int digital_pins[DigitalInLen] = {-1, -1, -1, 21, 4, 18, 23, 22, -1, 5, 19, 15, 32, 25, 33, 14}; 
+
+    /**
+     * @brief arrays to hold button mapping and toggling
+    */
+    int digital_mapping[DigitalInLen] = {-1, -1, -1, 21, 4, 18, 23, 22, -1, 5, 19, 15, 32, 25, 33, 14};
+    int digital_toggling[DigitalInLen] = {0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1};
+
+
+    /**
+     * @brief Arrays to send replies to the gamecube. InGameReply filled with values from the
+     *        buttons_in and analogs_in arrays
+    */
     int InGameReply[InGameReplyLen] = {ZeroZero, ZeroZero, ZeroZero, ZeroZero, // 0 0 0 Start Y X B A
                                        OneZero, ZeroZero, ZeroZero, ZeroZero,  // 1 L R Z D-U D-D D-R D-L
                                        OneZero, ZeroZero, ZeroZero, ZeroZero,  // Analog X
@@ -643,7 +811,6 @@ private:
                                        ZeroZero, ZeroZero, ZeroZero, ZeroZero, // R-Trigger
                                        STOP};
 
-    // todo:comment this
     int ProbeReply[ProbeReplyLen] = {ZeroZero, ZeroZero, OneZero, ZeroOne,
                                      ZeroZero, ZeroZero, ZeroZero, ZeroZero,
                                      ZeroZero, ZeroZero, ZeroZero, OneOne, STOP};
@@ -651,21 +818,36 @@ private:
     int OriginEnd[OriginEndLen] = {ZeroZero, ZeroZero, ZeroZero, ZeroZero, // Null
                                    ZeroZero, ZeroZero, ZeroZero, ZeroZero, // Null
                                    STOP};
-    // How many times to read inputs before averaging
+    
+    /**
+     * @brief Counts number of reads for averaging
+    */
     int read_counter1 = 0;
 
-    //////// /* Private Methods*/ ////////
 
+    /*******************************************************************
+    *  PRIVATE METHODS
+    *******************************************************************/
+
+    /**
+     * @brief Fills the button mapping message with values from the mapping and toggling arrays
+    */
     void fillDigitalMappingMessage(int mapping[], int toggling[], char (&MappingMSG)[ButtonMappingMSGLen])
     {
-        for (int i = 0; i < ButtonMappingMSGLen; i+=3){
+        for (int i = 0; i < ButtonMappingMSGLen - 1; i+=3){
             MappingMSG[i] = getCharFromPin(mapping[buttonMappingMap[i]]);
             MappingMSG[i+1] = getCharFromToggle(toggling[buttonMappingMap[i]]);
-            MappingMSG[i+2] = '.';
+
+            if (i < ButtonMappingMSGLen -2)
+            {
+                MappingMSG[i+2] = '.';
+            }
         }
     }
 
-    // set digital input pin modes to input_pullup
+    /**
+     * @brief Set the used digital input pin modes to input_pullup
+    */
     void setPinsToPullup()
     {
         for (int i = 0; i < DigitalInLen; i++)
@@ -719,16 +901,22 @@ private:
         return toggle;
     }
     
-    // Wrapper around read_inputs so we can start it as an rtos task. Needs to be static/global, not a class member func
+    /**
+     * @brief wrapper around the realtime task read_inputs. FreeRTOS task functions need to be static
+     *        or global so this is a way around it being a class member function.
+    */
     static void startTask(void *_this)
     {
         // (KEGController*)_this->read_inputs();
         static_cast<KEGController *>(_this)->read_inputs();
     }
 
-    // The task called on core 0
-    // Calls the function to update the input state arrays and delays as to not setoff a watchdog timeout
-    // void read_inputs(void *parameter)
+    /**
+     * @brief The realtime task loop attached to core 0. 
+     *        Inputs are read from the controller and summed in check_buttons, then the
+     *        values are averaged and the reply is updated in update_reply
+     * @note  Delays so as to not set off a watchdog timeout
+    */
     void read_inputs()
     {
         for (;;)
@@ -759,8 +947,10 @@ private:
         }
     }
 
-    // reads the values from all the digital and analog inputs
-    // saves the read values into the appropriate arrays
+    /**
+     * @brief Reads the values from all the digital and analog inputs, and saves
+     *        the read values into the appropriate arrays
+    */
     void check_buttons() // change name to read_inputs()?
     {
         for (int i = 0; i < DigitalInLen; i++)
@@ -793,9 +983,11 @@ private:
         analogSums.ar += analogR / 2;
     }
 
-    // loops through the digital input array and converts the readings to 6 bit UART encodings
-    // loops through analog input array and converts the readings to 6 bit UART encodings
-    // these are then used to update the output signal from the controller
+
+    /**
+     * @brief Loops through the analog and digital input arrays and converts readings to 6 bit UART encodings.
+     *        These are then used to update the output signal from the controller
+    */
     void update_reply()
     {
         int next_val = 0;
@@ -859,9 +1051,11 @@ private:
         }
     }
 
-    // switch case statement that compares the command byte to known commands
-    // based on the command bytes value a different message is sent
-    // the uart buffer is then cleared as to not have a read of the sent data occur
+    /**
+     * @brief Switch statement that compares the command byte to known commands.
+     *        Based on the command bytes value a different message is sent.
+     *        The uart buffer is then cleared as to not have a read of the sent data occur
+    */
     void choose_and_reply()
     {
         to_int();
@@ -895,8 +1089,10 @@ private:
         }
     }
 
-    // checks the physical pins (5,19,22,21) which map to physical buttons (L,R,A,Start) respectively
-    // if they are all high the sent message is changed to be only those 4 buttons clicked
+    /**
+     * @brief checks the physical pins (5,19,22,21) which map to physical buttons (L,R,A,Start) respectively
+     *        if they are all high the sent message is changed to be only those 4 buttons clicked
+    */
     void checkForLRAStart()
     {
         int LRAStart = 0;
@@ -920,9 +1116,9 @@ private:
         }
     }
 
-    /* Writes */
-
-    // writes the current stick calibration values to memory
+    /**
+     * @brief writes the current stick calibration values
+    */
     void writeStickCalToMem()
     {
         preferences.begin("AnalogCal", false);
@@ -959,7 +1155,9 @@ private:
         preferences.end();
     }
 
-    // writes the current stick calibration values to memory
+    /** 
+     * @brief writes the current stick deadzone values to memory
+    */
     void writeStickDeadzonesToMem()
     {
         preferences.begin("AnalogDead", false);
@@ -996,7 +1194,9 @@ private:
         preferences.end();
     }
 
-    // writes the current button mapping to memory
+    /**
+     * @brief write the current button mapping to memory
+    */
     void writeButtonMappingToMem()
     {
         preferences.begin("DigitalMap", false);
@@ -1065,6 +1265,9 @@ private:
         preferences.end();
     }
 
+    /**
+     * @brief write BLEpassword to memory
+    */
     void writeBLEpasswordToMem(String newPass)
     {
         preferences.begin("Passwords", false);
@@ -1073,7 +1276,9 @@ private:
         BLEpassword = newPass;
     }
 
-    // reads the stick calibration values from memory
+    /** 
+     * @brief Reads the stick deadzone values from memory
+    */
     void readStickDeadzonesFromMem()
     {
         preferences.begin("AnalogDead", true);
@@ -1097,7 +1302,9 @@ private:
         preferences.end();
     }
 
-    // reads the stick calibration values from memory
+    /** 
+     * @brief reads the stick calibration values from memory
+    */
     void readStickCalFromMem()
     {
         preferences.begin("AnalogCal", true);
@@ -1112,7 +1319,7 @@ private:
 
         stickCalVals.CX[1] = preferences.getUShort("CXNeutch", 0);
         stickCalVals.CX[2] = preferences.getUShort("CXHigh", 0);
-        stickCalVals.CX[3] = preferences.getUShort("CXLow", 0);
+        stickCalVals.CX[0] = preferences.getUShort("CXLow", 0);
 
         stickCalVals.CY[1] = preferences.getUShort("CYNeutch", 0);
         stickCalVals.CY[2] = preferences.getUShort("CYHigh", 0);
@@ -1121,8 +1328,10 @@ private:
         preferences.end();
     }
 
-    //  0  0  0 Start Y  X   B   A   1   L  R   Z   D-U  D-D  D-R  D-L
-    //{-1,-1,-1, 21,  4, 18, 23, 22, -1, 5, 19, 15, 32,  25,  33,  14};
+    /**
+     * @brief load digital_mapping and digital_toggling arrays with saved mapping from memory
+     * 
+    */
     void readButtonMappingFromMem()
     {
         preferences.begin("DigitalMap", true);
@@ -1168,6 +1377,9 @@ private:
         updateDigitalInputPins();
     }
 
+    /** 
+     * @brief read BLEpassword from memory
+    */
     void readBLEpasswordFromMem()
     {
         preferences.begin("Passwords", true);
@@ -1175,14 +1387,9 @@ private:
         preferences.end();
     }
 
-    void swap_buttons(int ind1, int ind2)
-    {
-        int temp = digital_pins[ind1];
-        digital_pins[ind1] = digital_pins[ind2];
-        digital_pins[ind2] = temp;
-    }
-
-    // updates digital_pins with the currently mapped values
+    /**
+     * @brief updates digital_pins array with currently stored mapping
+    */
     void updateDigitalInputPins()
     {
         for (int i = 0; i < DigitalInLen; i++)
@@ -1198,8 +1405,9 @@ private:
         }
     }
 
-    // loop through btnMappingStr and update 
-    // why not save string to memory and then use this to update? Removes read
+    /**
+     * @brief loop through btnMappingStr and update 
+    */
     void updateButtonMapping(String btnMappingStr)
     {
         int pin;
@@ -1207,7 +1415,7 @@ private:
         String read_val_1;
         String read_val_2;
 
-        for (int i=0; i < btnMappingStr.length(); i+=3)
+        for (int i=0; i < ButtonMappingMSGLen; i+=3)
         {
             read_val_1 = btnMappingStr.charAt(i);
             read_val_2 = btnMappingStr.charAt(i+1);
@@ -1218,8 +1426,10 @@ private:
         updateDigitalInputPins();
     }
 
-    // parses the calibration string and fills the stick calibration struct with the new values.
-    // New values stored in struct but not saved to memory unless user chooses to
+    /** 
+     * @brief parses the calibration string and fills the stick calibration struct with the new values.
+     *        New values stored in struct but not saved to memory unless user chooses to
+    */
     void ParseCalibrationString(String str)
     {
         stickCalVals.AX[1] = str.substring(0, 4).toInt();
@@ -1231,7 +1441,7 @@ private:
         stickCalVals.AY[2] = str.substring(25, 29).toInt();
 
         stickCalVals.CX[1] = str.substring(30, 34).toInt();
-        stickCalVals.CX[3] = str.substring(35, 39).toInt();
+        stickCalVals.CX[0] = str.substring(35, 39).toInt();
         stickCalVals.CX[2] = str.substring(40, 44).toInt();
 
         stickCalVals.CY[1] = str.substring(45, 49).toInt();
@@ -1239,8 +1449,10 @@ private:
         stickCalVals.CY[2] = str.substring(55, 59).toInt();
     }
 
-    // parses deadzone string and fills stick deadzone struct with new values.
-    // similarly not saved to memory until user chooses to
+    /**
+     * @brief Parses deadzone string and fills stick deadzone struct with new values.
+     *        Values stored but not saved to memory unless user chooses
+    */
     void ParseDeadzoneString(String str)
     {
         stickDeadzVals.AX[0] = str.substring(0, 3).toInt();
@@ -1260,6 +1472,9 @@ private:
         stickDeadzVals.CY[2] = str.substring(44, 47).toInt();
     }
 
+    /**
+     * @brief Sets up bluetooth connection.
+    */
     void setupBLE()
     {
         BLEDevice::init(bleServerName);
@@ -1290,7 +1505,9 @@ private:
         bt_millis_count = millis();
     }
 
-    // Handles all bluetooth requests coming from the received message
+    /**
+     * @brief Handles all bluetooth requests coming from the received message
+    */
     void BLEHandler()
     {
         if (bluetoothConnected)
@@ -1300,8 +1517,8 @@ private:
             char fifthChar = receivedMSG[4];
             char fourthChar = receivedMSG[3];
             char thirdChar = receivedMSG[2];
-            int isX = !digitalRead(18);
-            int isY = !digitalRead(4);
+            int isX = !digitalRead(charToPinMap['X']);
+            int isY = !digitalRead(charToPinMap['Y']);
             char firstChar = receivedMSG[0];
 
             //    Serial.println(fifthChar == ',');
@@ -1420,8 +1637,10 @@ private:
         }
     }
 
-    // converts the first 8 GameCube bits of data to a command byte
-    // also sets the stop_bit_9 variable which tells us if the 9th GameCube bit was a stop bit or not
+    /**
+     * @brief converts the first 8 GameCube bits of data to a command byte and also
+     *        sets stop_bit_9 which tells us if the 9th GameCube bit was a stop bit or not
+    */
     void to_int()
     {
         int j = 0;
@@ -1461,4 +1680,14 @@ private:
     }
 };
 
+KEGController controller;
 
+void setup()
+{
+    controller.setup();
+}
+
+void loop()
+{
+    controller.loop();
+}
