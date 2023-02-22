@@ -555,7 +555,7 @@ public:
             resetPasswordFlag = 1;
         }
 
-        if(!digitalRead(charToPinMap['Y']) && !digitalRead(charToPinMap6['d'])){
+        if(!digitalRead(charToPinMap['Y']) && !digitalRead(charToPinMap['d'])){
             eraseOTA();
             delay(1000);
         }
