@@ -48,10 +48,6 @@
 
 #define LEDPin 2
 
-
-int stop_bit_9 = 0;
-int command_byte = 0;
-
 // Wifi setup
 WebServer server(80);
 char ipAddy[16];
@@ -206,6 +202,7 @@ void IRAM_ATTR onTimer()
 
 // from boost (functional/hash):
 // see http://www.boost.org/doc/libs/1_35_0/doc/html/hash/combine.html template
+// for hashing pairs in unordered map for fast lookup
 template <class T>
 inline void hash_combine(size_t &seed, T const &v)
 {
@@ -503,7 +500,6 @@ void cleanUpBufferRead(int (&buffer)[BufferHolderLen], int &buffer_index)
     }
 }
 
-
 /**
  * @brief Writes data over 6 bit uart line serial 2
  *        Absolutely crucial that this function have the portENTER_CRITICAL_ISR wrapping the serial writes.
@@ -631,7 +627,6 @@ private:
     // BLE stuff
     String BLEpassword;
 
-
     // serial buffer array
     int buffer_holder[BufferHolderLen] = {0};
     int buff_index = 0;
@@ -639,7 +634,7 @@ private:
 
     // // communications variables
     int command_byte = 0;
-    // int stop_bit_9 = 0;
+    int stop_bit_9 = 0;
 
     // // esp32 helper to write to memory (save settings)
     Preferences preferences;
@@ -683,7 +678,7 @@ private:
     /**
      * @brief Struct to hold the sum of recent analog read values
      *
-     * @note read_counter1 is the number of reads before averaging and updating reply
+     * @note read_counter is the number of reads before averaging and updating reply
      */
     struct SummedAnalogReads
     {
@@ -728,18 +723,10 @@ private:
      */
     enum PinIndex
     {
-        START = 3,
-        Y = 4,
-        X = 5,
-        B = 6,
-        A = 7,
-        L = 9,
-        R = 10,
-        Z = 11,
-        DU = 12,
-        DD = 13,
-        DR = 14,
-        DL = 15
+        START = 3, Y = 4, X = 5,
+        B = 6, A = 7, L = 9,
+        R = 10, Z = 11, DU = 12,
+        DD = 13, DR = 14,  DL = 15
     };
 
     /**
@@ -817,7 +804,7 @@ private:
     /**
      * @brief Counts number of reads before averaging
      */
-    int read_counter1 = 0;
+    int read_counter = 0;
 
 
     /*******************************************************************
@@ -893,11 +880,11 @@ private:
                 __asm__("nop\n\t");
             }
 
-            read_counter1++;
-            if (read_counter1 >= 10)
+            read_counter++;
+            if (read_counter >= 10)
             {
                 update_reply();
-                read_counter1 = 0;
+                read_counter = 0;
             }
         }
     }
@@ -963,28 +950,28 @@ private:
             InGameReply[count] = next_val;
             count++;
         }
-        analogMeans.aX = analogSums.ax / read_counter1;
+        analogMeans.aX = analogSums.ax / read_counter;
         analogs_in[0] = mapStickVals(stickCalVals.AX, stickDeadzVals.AX, analogMeans.aX);
         analogSums.ax = 0;
 
-        analogMeans.aY = analogSums.ay / read_counter1;
+        analogMeans.aY = analogSums.ay / read_counter;
         analogs_in[1] = mapStickVals(stickCalVals.AY, stickDeadzVals.AY, analogMeans.aY);
         analogSums.ay = 0;
 
-        analogMeans.cX = analogSums.cx / read_counter1;
+        analogMeans.cX = analogSums.cx / read_counter;
         analogs_in[2] = mapStickVals(stickCalVals.CX, stickDeadzVals.CX, analogMeans.cX);
         analogSums.cx = 0;
 
-        analogMeans.cY = analogSums.cy / read_counter1;
+        analogMeans.cY = analogSums.cy / read_counter;
         analogs_in[3] = mapStickVals(stickCalVals.CY, stickDeadzVals.CY, analogMeans.cY);
         analogSums.cy = 0;
 
-        analogMeans.aL = analogSums.al / read_counter1;
+        analogMeans.aL = analogSums.al / read_counter;
         //  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,aL);
         analogs_in[4] = analogMeans.aL;
         analogSums.al = 0;
 
-        analogMeans.aR = analogSums.ar / read_counter1;
+        analogMeans.aR = analogSums.ar / read_counter;
         //  analogs_in[5] = mapTriggerVals(RTHigh,RTLow,aR);
         analogs_in[5] = analogMeans.aR;
         analogSums.ar = 0;
@@ -1219,7 +1206,6 @@ private:
         preferences.end();
     }
 
-
     /**
      * @brief write BLEpassword to memory
      */
@@ -1360,285 +1346,285 @@ private:
         }
     }
 
-        /**
-         * @brief loop through btnMappingStr and update
-         */
-        void ParseButtonMappingString(String btnMappingStr)
-        {
-            int pin;
-            int toggle;
-            char read_val_1;
-            char read_val_2;
+    /**
+     * @brief loop through btnMappingStr and update
+     */
+    void ParseButtonMappingString(String btnMappingStr)
+    {
+        int pin;
+        int toggle;
+        char read_val_1;
+        char read_val_2;
 
-            for (int i = 0; i < ButtonMappingMSGLen; i += 3)
-            {
-                read_val_1 = btnMappingStr.charAt(i);
-                read_val_2 = btnMappingStr.charAt(i + 1);
-                pin = charToPinMap[read_val_1];
-                toggle = getToggleFromChar(read_val_2);
-                digital_mapping[buttonMappingMap[i]] = pin;
-                digital_toggling[buttonMappingMap[i]] = toggle;
-            }
-            updateDigitalInputPins();
+        for (int i = 0; i < ButtonMappingMSGLen; i += 3)
+        {
+            read_val_1 = btnMappingStr.charAt(i);
+            read_val_2 = btnMappingStr.charAt(i + 1);
+            pin = charToPinMap[read_val_1];
+            toggle = getToggleFromChar(read_val_2);
+            digital_mapping[buttonMappingMap[i]] = pin;
+            digital_toggling[buttonMappingMap[i]] = toggle;
         }
+        updateDigitalInputPins();
+    }
 
-        /**
-         * @brief parses the calibration string and fills the stick calibration struct with the new values.
-         *        New values stored in struct but not saved to memory unless user chooses to
-         */
-        void ParseCalibrationString(String str)
+    /**
+     * @brief parses the calibration string and fills the stick calibration struct with the new values.
+     *        New values stored in struct but not saved to memory unless user chooses to
+     */
+    void ParseCalibrationString(String str)
+    {
+        stickCalVals.AX[1] = str.substring(0, 4).toInt();
+        stickCalVals.AX[0] = str.substring(5, 9).toInt();
+        stickCalVals.AX[2] = str.substring(10, 14).toInt();
+
+        stickCalVals.AY[1] = str.substring(15, 19).toInt();
+        stickCalVals.AY[0] = str.substring(20, 24).toInt();
+        stickCalVals.AY[2] = str.substring(25, 29).toInt();
+
+        stickCalVals.CX[1] = str.substring(30, 34).toInt();
+        stickCalVals.CX[0] = str.substring(35, 39).toInt();
+        stickCalVals.CX[2] = str.substring(40, 44).toInt();
+
+        stickCalVals.CY[1] = str.substring(45, 49).toInt();
+        stickCalVals.CY[0] = str.substring(50, 54).toInt();
+        stickCalVals.CY[2] = str.substring(55, 59).toInt();
+    }
+    /**
+     * @brief Parses deadzone string and fills stick deadzone struct with new values.
+     *        Values stored but not saved to memory unless user chooses
+     */
+    void ParseDeadzoneString(String str)
+    {
+        stickDeadzVals.AX[0] = str.substring(0, 3).toInt();
+        stickDeadzVals.AX[1] = str.substring(4, 7).toInt();
+        stickDeadzVals.AX[2] = str.substring(8, 11).toInt();
+
+        stickDeadzVals.AY[0] = str.substring(12, 15).toInt();
+        stickDeadzVals.AY[1] = str.substring(16, 19).toInt();
+        stickDeadzVals.AY[2] = str.substring(20, 23).toInt();
+
+        stickDeadzVals.CX[0] = str.substring(24, 27).toInt();
+        stickDeadzVals.CX[1] = str.substring(28, 31).toInt();
+        stickDeadzVals.CX[2] = str.substring(32, 35).toInt();
+
+        stickDeadzVals.CY[0] = str.substring(36, 39).toInt();
+        stickDeadzVals.CY[1] = str.substring(40, 43).toInt();
+        stickDeadzVals.CY[2] = str.substring(44, 47).toInt();
+    }
+
+    /**
+     * @brief Sets up bluetooth connection.
+     */
+    void setupBLE()
+    {
+        BLEDevice::init(bleServerName);
+
+        // Create the BLE Server
+        BLEServer *pServer = BLEDevice::createServer();
+        pServer->setCallbacks(new MyServerCallbacks());
+
+        // Create the BLE Service
+        BLEService *Service1 = pServer->createService(SERVICE_UUID);
+        Service1->addCharacteristic(&Ch1);
+        Service1->addCharacteristic(&Ch2);
+        Ch1.addDescriptor(&Dp1);
+
+        if (resetPasswordFlag == 1)
+            Ch1.setValue("Reset Password");
+        else
+            Ch1.setValue("Password Incorrect");
+
+        Ch2.addDescriptor(&Dp2);
+        Ch2.setValue("Waiting for change to exactly: A");
+
+        // Start advertising
+        Service1->start();
+        BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+        pAdvertising->addServiceUUID(SERVICE_UUID);
+        pServer->getAdvertising()->start();
+        bt_millis_count = millis();
+    }
+
+    /**
+     * @brief Handles all bluetooth requests coming from the received message
+     */
+    void BLEHandler()
+    {
+        if (bluetoothConnected)
         {
-            stickCalVals.AX[1] = str.substring(0, 4).toInt();
-            stickCalVals.AX[0] = str.substring(5, 9).toInt();
-            stickCalVals.AX[2] = str.substring(10, 14).toInt();
-
-            stickCalVals.AY[1] = str.substring(15, 19).toInt();
-            stickCalVals.AY[0] = str.substring(20, 24).toInt();
-            stickCalVals.AY[2] = str.substring(25, 29).toInt();
-
-            stickCalVals.CX[1] = str.substring(30, 34).toInt();
-            stickCalVals.CX[0] = str.substring(35, 39).toInt();
-            stickCalVals.CX[2] = str.substring(40, 44).toInt();
-
-            stickCalVals.CY[1] = str.substring(45, 49).toInt();
-            stickCalVals.CY[0] = str.substring(50, 54).toInt();
-            stickCalVals.CY[2] = str.substring(55, 59).toInt();
-        }
-        /**
-         * @brief Parses deadzone string and fills stick deadzone struct with new values.
-         *        Values stored but not saved to memory unless user chooses
-         */
-        void ParseDeadzoneString(String str)
-        {
-            stickDeadzVals.AX[0] = str.substring(0, 3).toInt();
-            stickDeadzVals.AX[1] = str.substring(4, 7).toInt();
-            stickDeadzVals.AX[2] = str.substring(8, 11).toInt();
-
-            stickDeadzVals.AY[0] = str.substring(12, 15).toInt();
-            stickDeadzVals.AY[1] = str.substring(16, 19).toInt();
-            stickDeadzVals.AY[2] = str.substring(20, 23).toInt();
-
-            stickDeadzVals.CX[0] = str.substring(24, 27).toInt();
-            stickDeadzVals.CX[1] = str.substring(28, 31).toInt();
-            stickDeadzVals.CX[2] = str.substring(32, 35).toInt();
-
-            stickDeadzVals.CY[0] = str.substring(36, 39).toInt();
-            stickDeadzVals.CY[1] = str.substring(40, 43).toInt();
-            stickDeadzVals.CY[2] = str.substring(44, 47).toInt();
-        }
-
-        /**
-         * @brief Sets up bluetooth connection.
-         */
-        void setupBLE()
-        {
-            BLEDevice::init(bleServerName);
-
-            // Create the BLE Server
-            BLEServer *pServer = BLEDevice::createServer();
-            pServer->setCallbacks(new MyServerCallbacks());
-
-            // Create the BLE Service
-            BLEService *Service1 = pServer->createService(SERVICE_UUID);
-            Service1->addCharacteristic(&Ch1);
-            Service1->addCharacteristic(&Ch2);
-            Ch1.addDescriptor(&Dp1);
+            receivedMSG = (String)Ch2.getValue().c_str();
+            char fifthChar = receivedMSG[4];
+            char fourthChar = receivedMSG[3];
+            char thirdChar = receivedMSG[2];
+            int isX = !digitalRead(charToPinMap['X']);
+            int isY = !digitalRead(charToPinMap['Y']);
+            char firstChar = receivedMSG[0];
 
             if (resetPasswordFlag == 1)
-                Ch1.setValue("Reset Password");
-            else
-                Ch1.setValue("Password Incorrect");
-
-            Ch2.addDescriptor(&Dp2);
-            Ch2.setValue("Waiting for change to exactly: A");
-
-            // Start advertising
-            Service1->start();
-            BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-            pAdvertising->addServiceUUID(SERVICE_UUID);
-            pServer->getAdvertising()->start();
-            bt_millis_count = millis();
-        }
-
-        /**
-         * @brief Handles all bluetooth requests coming from the received message
-         */
-        void BLEHandler()
-        {
-            if (bluetoothConnected)
             {
-                receivedMSG = (String)Ch2.getValue().c_str();
-                char fifthChar = receivedMSG[4];
-                char fourthChar = receivedMSG[3];
-                char thirdChar = receivedMSG[2];
-                int isX = !digitalRead(charToPinMap['X']);
-                int isY = !digitalRead(charToPinMap['Y']);
-                char firstChar = receivedMSG[0];
-
-                if (resetPasswordFlag == 1)
+                if (firstChar == 'P' && passWriteFlag == 0)
                 {
-                    if (firstChar == 'P' && passWriteFlag == 0)
+                    writeBLEpasswordToMem(receivedMSG.substring(1));
+                    passWriteFlag = 1;
+                    resetPasswordFlag = 0;
+                    Ch1.setValue("Password Reset");
+                    Ch1.notify();
+                }
+                else
+                {
+                    Ch1.setValue("Reset Password");
+                    Ch1.notify();
+                }
+            }
+            else
+            {
+                if (password_correct == 0)
+                {
+                    if ((String)Ch2.getValue().c_str() == BLEpassword && isX && isY)
                     {
-                        writeBLEpasswordToMem(receivedMSG.substring(1));
-                        passWriteFlag = 1;
-                        resetPasswordFlag = 0;
-                        Ch1.setValue("Password Reset");
+                        password_correct = 1;
+                        Ch1.setValue("Password Correct");
                         Ch1.notify();
                     }
                     else
                     {
-                        Ch1.setValue("Reset Password");
+                        Ch1.setValue("Password Incorrect");
                         Ch1.notify();
                     }
                 }
                 else
                 {
-                    if (password_correct == 0)
-                    {
-                        if ((String)Ch2.getValue().c_str() == BLEpassword && isX && isY)
-                        {
-                            password_correct = 1;
-                            Ch1.setValue("Password Correct");
-                            Ch1.notify();
-                        }
-                        else
-                        {
-                            Ch1.setValue("Password Incorrect");
-                            Ch1.notify();
-                        }
+                    if (receivedMSG == "A")
+                    { // A means requesting Analog data
+                        sprintf(AnalogMSG, "%04d,%04d,%04d,%04d,%04d,%04d", analogMeans.aX, analogMeans.aY,
+                                analogMeans.cX, analogMeans.cY,
+                                analogMeans.aL, analogMeans.aR);
+                        Ch1.setValue(AnalogMSG);
+                        Ch1.notify();
                     }
-                    else
+                    else if (fifthChar == ',')
                     {
-                        if (receivedMSG == "A")
-                        { // A means requesting Analog data
-                            sprintf(AnalogMSG, "%04d,%04d,%04d,%04d,%04d,%04d", analogMeans.aX, analogMeans.aY,
-                                    analogMeans.cX, analogMeans.cY,
-                                    analogMeans.aL, analogMeans.aR);
-                            Ch1.setValue(AnalogMSG);
-                            Ch1.notify();
-                        }
-                        else if (fifthChar == ',')
-                        {
-                            ParseCalibrationString(receivedMSG);
-                        }
-                        else if (receivedMSG == "SAC" && savedCalib == 0)
-                        { // SAC means Save Analog Calibration Values
-                            writeStickCalToMem();
-                            writeStickDeadzonesToMem();
-                            savedCalib = 1;
-                        }
-                        else if (receivedMSG == "RAC")
-                        {
-                            sprintf(AnalogCalibMSG, "%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d",
-                                    stickCalVals.AX[1], stickCalVals.AX[0], stickCalVals.AX[2],
-                                    stickCalVals.AY[1], stickCalVals.AY[0], stickCalVals.AY[2],
-                                    stickCalVals.CX[1], stickCalVals.CX[0], stickCalVals.CX[2],
-                                    stickCalVals.CY[1], stickCalVals.CY[0], stickCalVals.CY[2]);
-                            Ch1.setValue(AnalogCalibMSG);
-                            Ch1.notify();
-                        }
-                        else if (fourthChar == ',')
-                        {
-                            ParseDeadzoneString(receivedMSG);
-                        }
-                        else if (receivedMSG == "SSD" && savedDeadzones == 0)
-                        { // SSD = Save Stick Deadzones
-                            writeStickDeadzonesToMem();
-                            savedDeadzones = 1;
-                        }
-                        else if (thirdChar == '.')
-                        {
-                            ParseButtonMappingString(receivedMSG);
-                        }
-                        else if (receivedMSG == "RBM")
-                        {
-                            fillDigitalMappingMessage();
-                            Ch1.setValue(DigitalMappingMSG);
-                            Ch1.notify();
-                        }
-                        else if (receivedMSG == "SBM" && savedButtonMapping == 0)
-                        {
-                            writeButtonMappingToMem();
-                            savedButtonMapping = 1;
-                        }
-                        else if (firstChar == 'W' && wifi_flag == 0)
-                        {
-                            wifiUploadEnabled(receivedMSG);
-                            Ch1.setValue(ipAddy);
-                            Ch1.notify();
-                        }
-                        else if (firstChar == 'P' && passWriteFlag == 0)
-                        {
-                            writeBLEpasswordToMem(receivedMSG.substring(1));
-                            passWriteFlag = 1;
-                        }
-                        else if (receivedMSG == "RDC")
-                        {
-                            sprintf(AnalogDeadzoneMSG, "%03d,%03d,%03d:%03d,%03d,%03d:%03d,%03d,%03d:%03d,%03d,%03d",
-                                    stickDeadzVals.AX[0], stickDeadzVals.AX[1], stickDeadzVals.AX[2],
-                                    stickDeadzVals.AY[0], stickDeadzVals.AY[1], stickDeadzVals.AY[2],
-                                    stickDeadzVals.CX[0], stickDeadzVals.CX[1], stickDeadzVals.CX[2],
-                                    stickDeadzVals.CY[0], stickDeadzVals.CY[1], stickDeadzVals.CY[2]
-                            );
-                            Ch1.setValue(AnalogDeadzoneMSG);
-                            Ch1.notify();
-                        }
+                        ParseCalibrationString(receivedMSG);
+                    }
+                    else if (receivedMSG == "SAC" && savedCalib == 0)
+                    { // SAC means Save Analog Calibration Values
+                        writeStickCalToMem();
+                        writeStickDeadzonesToMem();
+                        savedCalib = 1;
+                    }
+                    else if (receivedMSG == "RAC")
+                    {
+                        sprintf(AnalogCalibMSG, "%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d",
+                                stickCalVals.AX[1], stickCalVals.AX[0], stickCalVals.AX[2],
+                                stickCalVals.AY[1], stickCalVals.AY[0], stickCalVals.AY[2],
+                                stickCalVals.CX[1], stickCalVals.CX[0], stickCalVals.CX[2],
+                                stickCalVals.CY[1], stickCalVals.CY[0], stickCalVals.CY[2]);
+                        Ch1.setValue(AnalogCalibMSG);
+                        Ch1.notify();
+                    }
+                    else if (fourthChar == ',')
+                    {
+                        ParseDeadzoneString(receivedMSG);
+                    }
+                    else if (receivedMSG == "SSD" && savedDeadzones == 0)
+                    { // SSD = Save Stick Deadzones
+                        writeStickDeadzonesToMem();
+                        savedDeadzones = 1;
+                    }
+                    else if (thirdChar == '.')
+                    {
+                        ParseButtonMappingString(receivedMSG);
+                    }
+                    else if (receivedMSG == "RBM")
+                    {
+                        fillDigitalMappingMessage();
+                        Ch1.setValue(DigitalMappingMSG);
+                        Ch1.notify();
+                    }
+                    else if (receivedMSG == "SBM" && savedButtonMapping == 0)
+                    {
+                        writeButtonMappingToMem();
+                        savedButtonMapping = 1;
+                    }
+                    else if (firstChar == 'W' && wifi_flag == 0)
+                    {
+                        wifiUploadEnabled(receivedMSG);
+                        Ch1.setValue(ipAddy);
+                        Ch1.notify();
+                    }
+                    else if (firstChar == 'P' && passWriteFlag == 0)
+                    {
+                        writeBLEpasswordToMem(receivedMSG.substring(1));
+                        passWriteFlag = 1;
+                    }
+                    else if (receivedMSG == "RDC")
+                    {
+                        sprintf(AnalogDeadzoneMSG, "%03d,%03d,%03d:%03d,%03d,%03d:%03d,%03d,%03d:%03d,%03d,%03d",
+                                stickDeadzVals.AX[0], stickDeadzVals.AX[1], stickDeadzVals.AX[2],
+                                stickDeadzVals.AY[0], stickDeadzVals.AY[1], stickDeadzVals.AY[2],
+                                stickDeadzVals.CX[0], stickDeadzVals.CX[1], stickDeadzVals.CX[2],
+                                stickDeadzVals.CY[0], stickDeadzVals.CY[1], stickDeadzVals.CY[2]
+                        );
+                        Ch1.setValue(AnalogDeadzoneMSG);
+                        Ch1.notify();
                     }
                 }
             }
         }
-  
-        /**
-         * @brief converts the first 8 GameCube bits of data to a command byte and also
-         *        sets STOP_bit_9 which tells us if the 9th GameCube bit was a STOP bit or not
-         */
-        void to_int()
+    }
+
+    /**
+     * @brief converts the first 8 GameCube bits of data to a command byte and also
+     *        sets stop_bit_9 which tells us if the 9th GameCube bit was a stop bit or not
+     */
+    void to_int()
+    {
+        int j = 0;
+        for (int i = 0; i < 4; i++)
         {
-            int j = 0;
-            for (int i = 0; i < 4; i++)
+            j = i * 2;
+            switch (buffer_holder[i])
             {
-                j = i * 2;
-                switch (buffer_holder[i])
-                {
-                case ZeroZero:
-                    bitWrite(command_byte, 8 - j - 1, 0);
-                    bitWrite(command_byte, 8 - j - 2, 0);
-                    break;
-                case ZeroOne:
-                    bitWrite(command_byte, 8 - j - 1, 0);
-                    bitWrite(command_byte, 8 - j - 2, 1);
-                    break;
-                case OneZero:
-                    bitWrite(command_byte, 8 - j - 1, 1);
-                    bitWrite(command_byte, 8 - j - 2, 0);
-                    break;
-                case OneOne:
-                    bitWrite(command_byte, 8 - j - 1, 1);
-                    bitWrite(command_byte, 8 - j - 2, 1);
-                    break;
-                default:
-                    break;
-                }
-            }
-            if (buffer_holder[4] == STOP)
-            {
-                stop_bit_9 = 1;
-            }
-            else
-            {
-                stop_bit_9 = 0;
+            case ZeroZero:
+                bitWrite(command_byte, 8 - j - 1, 0);
+                bitWrite(command_byte, 8 - j - 2, 0);
+                break;
+            case ZeroOne:
+                bitWrite(command_byte, 8 - j - 1, 0);
+                bitWrite(command_byte, 8 - j - 2, 1);
+                break;
+            case OneZero:
+                bitWrite(command_byte, 8 - j - 1, 1);
+                bitWrite(command_byte, 8 - j - 2, 0);
+                break;
+            case OneOne:
+                bitWrite(command_byte, 8 - j - 1, 1);
+                bitWrite(command_byte, 8 - j - 2, 1);
+                break;
+            default:
+                break;
             }
         }
-    };
-
-    KEGController controller;
-
-    void setup()
-    {
-        controller.setup();
+        if (buffer_holder[4] == STOP)
+        {
+            stop_bit_9 = 1;
+        }
+        else
+        {
+            stop_bit_9 = 0;
+        }
     }
+};
 
-    void loop()
-    {
-        controller.loop();
-    }
+KEGController controller;
+
+void setup()
+{
+    controller.setup();
+}
+
+void loop()
+{
+    controller.loop();
+}
