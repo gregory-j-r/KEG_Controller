@@ -1,5 +1,4 @@
 #include <stdio.h>
-// #include <stdlib.h>
 #include <string.h>
 #include <unordered_map>
 
@@ -16,7 +15,7 @@
 #include "driver/adc.h"
 
 #include "utils.h"
-
+#include "wireless.h"
 
 #define ProbeReplyLen 13
 #define InGameReplyLen 33
@@ -37,42 +36,6 @@
 
 #define LEDPin 2
 
-// Wifi setup
-extern WebServer server;
-extern char ipAddy[16];
-extern int wifi_flag;
-
-// ESP32 OTA webpage indexes
-extern const char *serverIndex;
-extern const char *loginIndex;
-
-// BLE setup
-#define bleServerName "KEG_V1_4_G"
-#define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-#define CHARACTERISTIC_UUID_2 "da1e7d98-916b-11ed-a1eb-0242ac120002"
-
-BLECharacteristic Ch1(CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
-BLEDescriptor Dp1(BLEUUID((uint16_t)0x2902));
-BLECharacteristic Ch2(CHARACTERISTIC_UUID_2, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
-BLEDescriptor Dp2(BLEUUID((uint16_t)0x2902));
-
-extern bool bluetoothConnected;
-String receivedMSG;
-char AnalogMSG[19] = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
-char AnalogCalibMSG[59];
-char AnalogDeadzoneMSG[47];
-char DigitalMappingMSG[35];
-
-int savedCalib = 0;
-int savedDeadzones = 0;
-int savedButtonMapping = 0;
-
-extern int password_correct;
-int passWriteFlag = 0;
-int resetPasswordFlag = 0;
-// End BLE Setup
-
 
 // // Pointer to task ReadInputs running on core 0. For RTOS
 TaskHandle_t ReadInputs;
@@ -87,7 +50,6 @@ void IRAM_ATTR onTimer()
 {
     triggered = 1;
 }
-
 
 /**
  * @brief This class defines the code to setup and run a KEG controller.
@@ -131,8 +93,9 @@ public:
             eraseOTA();
             delay(1000);
         }
+        
 
-        setupBLE();
+        bluetooth.setupBLE(bt_millis_count, resetPasswordFlag);
 
         pinMode(LEDPin, OUTPUT);
 
@@ -200,17 +163,26 @@ private:
     // BLE stuff
     String BLEpassword;
     unsigned long bt_millis_count;
+    int resetPasswordFlag = 0;
+    int passWriteFlag = 0;
+    int savedCalib = 0;
+    int savedDeadzones = 0;
+    int savedButtonMapping = 0;
+    char DigitalMappingMSG[35];
+
+    KEGBluetooth bluetooth;
+
 
     // serial buffer array
     int buffer_holder[BufferHolderLen] = {0};
     int buff_index = 0;
     int readVal = 0;
 
-    // // communications variables
+    // communications variables
     int command_byte = 0;
     int stop_bit_9 = 0;
 
-    // // esp32 helper to write to memory (save settings)
+    // esp32 class for writing to memory (save settings)
     Preferences preferences;
 
     /**
@@ -399,27 +371,12 @@ private:
         }
     }
  
-    // /**
-    //  * @brief Set the used digital input pin modes to input_pullup
-    //  */
-    // void setPinsToPullup(int digital_pins[])
-    // {
-    //     for (int i = 0; i < DigitalInLen; i++)
-    //     {
-    //         if (digital_pins[i] != -1)
-    //         {
-    //             pinMode(digital_pins[i], INPUT_PULLUP);
-    //         }
-    //     }
-    // }
-
     /**
      * @brief wrapper around the realtime task read_inputs. FreeRTOS task functions need to be static
      *        or global so this is a way around it being a class member function.
      */
     static void startTask(void *_this)
     {
-        // (KEGController*)_this->read_inputs();
         static_cast<KEGController *>(_this)->read_inputs();
     }
 
@@ -985,46 +942,13 @@ private:
     }
 
     /**
-     * @brief Sets up bluetooth connection.
-     */
-    void setupBLE()
-    {
-        BLEDevice::init(bleServerName);
-
-        // Create the BLE Server
-        BLEServer *pServer = BLEDevice::createServer();
-        pServer->setCallbacks(new MyServerCallbacks());
-
-        // Create the BLE Service
-        BLEService *Service1 = pServer->createService(SERVICE_UUID);
-        Service1->addCharacteristic(&Ch1);
-        Service1->addCharacteristic(&Ch2);
-        Ch1.addDescriptor(&Dp1);
-
-        if (resetPasswordFlag == 1)
-            Ch1.setValue("Reset Password");
-        else
-            Ch1.setValue("Password Incorrect");
-
-        Ch2.addDescriptor(&Dp2);
-        Ch2.setValue("Waiting for change to exactly: A");
-
-        // Start advertising
-        Service1->start();
-        BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-        pAdvertising->addServiceUUID(SERVICE_UUID);
-        pServer->getAdvertising()->start();
-        bt_millis_count = millis();
-    }
-
-    /**
      * @brief Handles all bluetooth requests coming from the received message
      */
     void BLEHandler()
     {
         if (bluetoothConnected)
         {
-            receivedMSG = (String)Ch2.getValue().c_str();
+            String receivedMSG = bluetooth.getMessageString();
             char fifthChar = receivedMSG[4];
             char fourthChar = receivedMSG[3];
             char thirdChar = receivedMSG[2];
@@ -1051,7 +975,8 @@ private:
             else
             {
                 if (password_correct == 0)
-                {
+                {// this is just received msg?
+                    // if receivedMSG == BLEpassword && isX && isY)
                     if ((String)Ch2.getValue().c_str() == BLEpassword && isX && isY)
                     {
                         password_correct = 1;
@@ -1068,6 +993,7 @@ private:
                 {
                     if (receivedMSG == "A")
                     { // A means requesting Analog data
+                        char AnalogMSG[19] = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
                         sprintf(AnalogMSG, "%04d,%04d,%04d,%04d,%04d,%04d", analogMeans.aX, analogMeans.aY,
                                 analogMeans.cX, analogMeans.cY,
                                 analogMeans.aL, analogMeans.aR);
@@ -1086,6 +1012,7 @@ private:
                     }
                     else if (receivedMSG == "RAC")
                     {
+                        char AnalogCalibMSG[59];
                         sprintf(AnalogCalibMSG, "%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d",
                                 stickCalVals.AX[1], stickCalVals.AX[0], stickCalVals.AX[2],
                                 stickCalVals.AY[1], stickCalVals.AY[0], stickCalVals.AY[2],
@@ -1131,6 +1058,7 @@ private:
                     }
                     else if (receivedMSG == "RDC")
                     {
+                        char AnalogDeadzoneMSG[47];
                         sprintf(AnalogDeadzoneMSG, "%03d,%03d,%03d:%03d,%03d,%03d:%03d,%03d,%03d:%03d,%03d,%03d",
                                 stickDeadzVals.AX[0], stickDeadzVals.AX[1], stickDeadzVals.AX[2],
                                 stickDeadzVals.AY[0], stickDeadzVals.AY[1], stickDeadzVals.AY[2],
