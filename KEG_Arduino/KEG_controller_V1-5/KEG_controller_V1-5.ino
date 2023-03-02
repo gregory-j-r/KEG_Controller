@@ -22,10 +22,6 @@
 
 #define OriginEndLen 9
 
-#define ProbeLen 5
-#define OriginLen 5
-#define PollLen 13
-
 #define ButtonMappingMSGLen 35
 #define DigitalInLen 16
 #define AnalogInLen 6
@@ -273,7 +269,7 @@ private:
     };
 
     /**
-     * @brief map to convert from two bits to the equivalent hex message
+     * @brief maps to convert between two bits <--> equivalent message
      */
     std::unordered_map<std::pair<int, int>, int, pair_hash> twoBitsToMessage =
         {{{std::make_pair(0, 0), ZeroZero},
@@ -281,15 +277,21 @@ private:
           {std::make_pair(0, 1), ZeroOne},
           {std::make_pair(1, 0), OneZero}}};
 
+    std::unordered_map<int, std::pair<int, int>> messageToTwoBits =
+        {{{ZeroZero, std::make_pair(0, 0)},
+          {OneOne, std::make_pair(1, 1)},
+          {ZeroOne, std::make_pair(0, 1)},
+          {OneZero, std::make_pair(1, 0)}}};
+
     /**
      * @brief Maps index in the button mapping string to the corresponding buttons. Each pair of indices
-     *        3k, 3k+1 are for a different button
+     *        3k, 3k+1 are for a different button. For parsing.
      */
     std::unordered_map<int, int> buttonMappingMap = {{0, A}, {3, B}, {6, START}, {9, X}, {12, Y}, {15, Z}, {18, L}, {21, R}, {24, DU}, {27, DR}, {30, DD}, {33, DL}};
 
     /**
-     * @brief LUT's for the original pin to button mapping
-     *        this
+     * @brief LUT's for the original pin to button mapping.
+     *        
      */
     std::unordered_map<int, char> pinToCharMap = {{22, 'A'}, {23, 'B'}, {21, 'S'}, {18, 'X'}, {4, 'Y'}, {15, 'Z'}, {5, 'L'}, {19, 'R'}, {32, 'u'}, {33, 'r'}, {25, 'd'}, {14, 'l'}};
 
@@ -316,16 +318,16 @@ private:
      */
     int digital_pins[DigitalInLen] = {-1, -1, -1, 21, 4, 18, 23, 22, -1, 5, 19, 15, 32, 25, 33, 14};
 
-    // /**
-    //  * @brief arrays to hold button mapping and toggling
-    //  */
+    /**
+     * @brief arrays to hold button mapping and toggling
+     */
     int digital_mapping[DigitalInLen] = {-1, -1, -1, 21, 4, 18, 23, 22, -1, 5, 19, 15, 32, 25, 33, 14};
     int digital_toggling[DigitalInLen] = {0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1};
 
-    // /**
-    //  * @brief Arrays to send replies to the gamecube. InGameReply filled with values from the
-    //  *        buttons_in and analogs_in arrays
-    //  */
+    /**
+     * @brief Arrays to send replies to the gamecube. InGameReply filled with values from the
+     *        buttons_in and analogs_in arrays
+     */
     int InGameReply[InGameReplyLen] = {ZeroZero, ZeroZero, ZeroZero, ZeroZero, // 0 0 0 Start Y X B A
                                        OneZero, ZeroZero, ZeroZero, ZeroZero,  // 1 L R Z D-U D-D D-R D-L
                                        OneZero, ZeroZero, ZeroZero, ZeroZero,  // Analog X
@@ -1077,41 +1079,60 @@ private:
      * @brief converts the first 8 GameCube bits of data to a command byte and also
      *        sets stop_bit_9 which tells us if the 9th GameCube bit was a stop bit or not
      */
+    // void to_int()
+    // {
+    //     int j = 0;
+    //     for (int i = 0; i < 4; i++)
+    //     {
+    //         j = i * 2;
+    //         switch (buffer_holder[i])
+    //         {
+    //         case ZeroZero:
+    //             bitWrite(command_byte, 8 - j - 1, 0);
+    //             bitWrite(command_byte, 8 - j - 2, 0);
+    //             break;
+    //         case ZeroOne:
+    //             bitWrite(command_byte, 8 - j - 1, 0);
+    //             bitWrite(command_byte, 8 - j - 2, 1);
+    //             break;
+    //         case OneZero:
+    //             bitWrite(command_byte, 8 - j - 1, 1);
+    //             bitWrite(command_byte, 8 - j - 2, 0);
+    //             break;
+    //         case OneOne:
+    //             bitWrite(command_byte, 8 - j - 1, 1);
+    //             bitWrite(command_byte, 8 - j - 2, 1);
+    //             break;
+    //         default:
+    //             break;
+    //         }
+    //     }
+    //     if (buffer_holder[4] == STOP)
+    //     {
+    //         stop_bit_9 = 1;
+    //     }
+    //     else
+    //     {
+    //         stop_bit_9 = 0;
+    //     }
+    // }
     void to_int()
     {
         int j = 0;
+        stop_bit_9 = 0;
+
         for (int i = 0; i < 4; i++)
         {
             j = i * 2;
-            switch (buffer_holder[i])
-            {
-            case ZeroZero:
-                bitWrite(command_byte, 8 - j - 1, 0);
-                bitWrite(command_byte, 8 - j - 2, 0);
-                break;
-            case ZeroOne:
-                bitWrite(command_byte, 8 - j - 1, 0);
-                bitWrite(command_byte, 8 - j - 2, 1);
-                break;
-            case OneZero:
-                bitWrite(command_byte, 8 - j - 1, 1);
-                bitWrite(command_byte, 8 - j - 2, 0);
-                break;
-            case OneOne:
-                bitWrite(command_byte, 8 - j - 1, 1);
-                bitWrite(command_byte, 8 - j - 2, 1);
-                break;
-            default:
-                break;
-            }
+            auto msg = buffer_holder[i];
+            auto twobits = messageToTwoBits[msg];
+            bitWrite(command_byte, 8 - j - 1, twobits.first);
+            bitWrite(command_byte, 8 - j - 2, twobits.second);
+
         }
         if (buffer_holder[4] == STOP)
         {
             stop_bit_9 = 1;
-        }
-        else
-        {
-            stop_bit_9 = 0;
         }
     }
 };
