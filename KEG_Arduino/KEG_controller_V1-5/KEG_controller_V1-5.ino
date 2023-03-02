@@ -88,6 +88,7 @@ public:
         {
             eraseOTA();
             delay(1000);
+            ESP.restart();
         }
         
 
@@ -303,7 +304,7 @@ private:
      * @note The formatting for these arrays:
      *
      *        buttons_in = [0, 0, 0, Start, Y, X, B, A, 1, L, R, Z, D-U, D-D, D-R, D-L]
-     *        analogs_in = [Analog-X, Analog-Y, C-Stick-X, C-Stick-Y, L-Trigger, R-Trigger[]
+     *        analogs_in = [Analog-X, Analog-Y, C-Stick-X, C-Stick-Y, L-Trigger, R-Trigger]
      */
     int buttons_in[DigitalInLen] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0};
     int analogs_in[AnalogInLen] = {128, 128, 128, 128, 0, 0};
@@ -395,7 +396,7 @@ private:
         {
             check_buttons();
 
-            if (millis() - bt_millis_count >= 90)
+            if (millis() - bt_millis_count >= 83)
             {
                 BLEHandler();
                 bt_millis_count = millis();
@@ -1079,43 +1080,6 @@ private:
      * @brief converts the first 8 GameCube bits of data to a command byte and also
      *        sets stop_bit_9 which tells us if the 9th GameCube bit was a stop bit or not
      */
-    // void to_int()
-    // {
-    //     int j = 0;
-    //     for (int i = 0; i < 4; i++)
-    //     {
-    //         j = i * 2;
-    //         switch (buffer_holder[i])
-    //         {
-    //         case ZeroZero:
-    //             bitWrite(command_byte, 8 - j - 1, 0);
-    //             bitWrite(command_byte, 8 - j - 2, 0);
-    //             break;
-    //         case ZeroOne:
-    //             bitWrite(command_byte, 8 - j - 1, 0);
-    //             bitWrite(command_byte, 8 - j - 2, 1);
-    //             break;
-    //         case OneZero:
-    //             bitWrite(command_byte, 8 - j - 1, 1);
-    //             bitWrite(command_byte, 8 - j - 2, 0);
-    //             break;
-    //         case OneOne:
-    //             bitWrite(command_byte, 8 - j - 1, 1);
-    //             bitWrite(command_byte, 8 - j - 2, 1);
-    //             break;
-    //         default:
-    //             break;
-    //         }
-    //     }
-    //     if (buffer_holder[4] == STOP)
-    //     {
-    //         stop_bit_9 = 1;
-    //     }
-    //     else
-    //     {
-    //         stop_bit_9 = 0;
-    //     }
-    // }
     void to_int()
     {
         int j = 0;

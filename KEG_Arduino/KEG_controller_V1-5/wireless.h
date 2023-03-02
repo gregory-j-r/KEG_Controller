@@ -33,14 +33,12 @@ class MyServerCallbacks : public BLEServerCallbacks
     {
         bluetoothConnected = false;
         password_correct = 0; // reset for next connection
+        BLEDevice::startAdvertising();
     }
-
-
 };
 class KEGBluetooth
 {
 public:
-
     std::string bleServerName = "KEG_V1_4_K";
 
     void setupBLE(unsigned long &bt_millis_count, int resetPasswordFlag)
@@ -79,9 +77,7 @@ public:
         String message = (String)Ch2.getValue().c_str();
         return message;
     }
-
 };
-
 
 /** Wifi - Wireless Upload */
 
