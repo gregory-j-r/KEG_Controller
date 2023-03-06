@@ -21,13 +21,11 @@
  * for hashing pairs in unordered map
 */
 template <class T>
-inline void hash_combine(size_t &seed, T const &v)
-{
+inline void hash_combine(size_t &seed, T const &v){
     seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
-struct pair_hash
-{
+struct pair_hash{
     template <class T1, class T2>
     size_t operator()(const std::pair<T1, T2> &p) const
     {
@@ -49,18 +47,14 @@ struct pair_hash
 template <typename T, unsigned int SIZE> void cleanUpBufferRead(T (&buffer)[SIZE], int &buffer_index)
 {
     int j = -1;
-    for (int i = 0; i < buffer_index; i++)
-    {
-        if (buffer[i] == -1)
-        {
+    for (int i = 0; i < buffer_index; i++){
+        if (buffer[i] == -1){
             j = i;
             break;
         }
     }
-    if (j != -1)
-    {
-        for (int i = j; i < buffer_index - 1; i++)
-        {
+    if (j != -1){
+        for (int i = j; i < buffer_index - 1; i++){
             buffer[i] = buffer[i + 1];
         }
         buffer_index -= 1;
@@ -75,11 +69,9 @@ extern portMUX_TYPE timerMux;
  *        Absolutely crucial that this function have the portENTER_CRITICAL_ISR wrapping the serial writes.
  *        This solved the "start" bug as it seems something was interrupting the serial writes
 */
-void writeData(int dat[], int len)
-{
+void writeData(int dat[], int len){
     portENTER_CRITICAL_ISR(&timerMux);
-    for (int i = 0; i < len; i++)
-    {
+    for (int i = 0; i < len; i++){
         Serial2.write(dat[i]);
     }
     portEXIT_CRITICAL_ISR(&timerMux);
@@ -88,12 +80,9 @@ void writeData(int dat[], int len)
 /**
  * @brief Set the used digital input pin modes to input_pullup
  */
-void setPinsToPullup(int digital_pins[], int arrLen)
-{
-    for (int i = 0; i < arrLen; i++)
-    {
-        if (digital_pins[i] != -1)
-        {
+void setPinsToPullup(int digital_pins[], int arrLen){
+    for (int i = 0; i < arrLen; i++){
+        if (digital_pins[i] != -1){
             pinMode(digital_pins[i], INPUT_PULLUP);
         }
     }
@@ -102,8 +91,7 @@ void setPinsToPullup(int digital_pins[], int arrLen)
 /**
  * @brief Use the high/low calibration values to map read value  
 */
-int mapStickVals(int calVals[], int dead[], int value)
-{
+int mapStickVals(int calVals[], int dead[], int value){
     int mapped_val = -1;
     double lowS;
     double highS;
@@ -116,39 +104,32 @@ int mapStickVals(int calVals[], int dead[], int value)
     int high = calVals[2];
 
     // make the slopes
-    if ((high - neutch) != 0)
-    {
+    if ((high - neutch) != 0){
         highS = 127.0 / ((double)high - (double)neutch);
         highSGood = 1;
     }
-    if ((neutch - low) != 0)
-    {
+    if ((neutch - low) != 0){
         lowS = 127.0 / ((double)neutch - (double)low);
         lowSGood = 1;
     }
 
     // map the value onto the line
-    if (val <= neutch && lowSGood == 1)
-    {
+    if (val <= neutch && lowSGood == 1){
         mapped_val = (int)(lowS * val - lowS * neutch + 127.0);
     }
-    if (val > neutch && highSGood == 1)
-    {
+    if (val > neutch && highSGood == 1){
         mapped_val = (int)(highS * val - highS * neutch + 127.0);
     }
 
     // check if mapped_val exceeds the bounds
-    if (mapped_val < 0)
-    {
+    if (mapped_val < 0){
         return 0;
     }
-    if (mapped_val > 255)
-    {
+    if (mapped_val > 255){
         return 255;
     }
 
-    if (mapped_val >= dead[0] && mapped_val <= dead[1])
-    {
+    if (mapped_val >= dead[0] && mapped_val <= dead[1]){
         mapped_val = dead[2];
     }
 
@@ -158,16 +139,13 @@ int mapStickVals(int calVals[], int dead[], int value)
 /**
  * @brief Converts binary toggle to Y/N characters
 */
-char getCharFromToggle(int toggle)
-{
+char getCharFromToggle(int toggle){
     char char_out;
 
-    if (toggle == 1)
-    {
+    if (toggle == 1){
         char_out = 'Y';
     }
-    else if (toggle == 0)
-    {
+    else if (toggle == 0){
         char_out = 'N';
     }
 
@@ -177,16 +155,13 @@ char getCharFromToggle(int toggle)
 /**
  * @brief Converts Y/N characters to binary toggle
 */
-int getToggleFromChar(char char_read)
-{
+int getToggleFromChar(char char_read){
     int toggle = 1;
 
-    if (char_read == 'Y')
-    {
+    if (char_read == 'Y'){
         toggle = 1;
     }
-    else if (char_read == 'N')
-    {
+    else if (char_read == 'N'){
         toggle = 0;
     }
 
@@ -196,16 +171,13 @@ int getToggleFromChar(char char_read)
 /**
  * @brief Clear/flush the UART serial port
 */
-void clearUARTrx()
-{
+void clearUARTrx(){
     int dump;
-    while (true)
-    {
-        if (Serial2.available())
-        {
+    while (true){
+        if (Serial2.available()){
             dump = Serial2.read();
-            if (dump == 63) // NOTE: make this readable
-            {
+            // 63 is STOP 
+            if (dump == 63){
                 break;
             }
         }
@@ -215,8 +187,7 @@ void clearUARTrx()
 /**
  * @brief Erase the partition holding the OTA update to boot back into factory in case of messup.
 */
-void eraseOTA()
-{
+void eraseOTA(){
     const esp_partition_t *partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "otadata");
     assert(partition != NULL);
 
