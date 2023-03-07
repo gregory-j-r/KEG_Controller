@@ -60,6 +60,14 @@ public:
     void setup(){
         setPinsToPullup(digital_pins, DigitalInLen); // set the pins to input_pullup mode
 
+        // check to see if holding down y and dpad-down on boot.
+        // Will erase OTA firmware and reset to factory firmware
+        if (!digitalRead(charToPinMap['Y']) && !digitalRead(charToPinMap['d'])){
+            eraseOTA();
+            delay(1000);
+            ESP.restart();
+        }
+
         readStickCalFromMem();       // read the stick calibration values from memory
         readStickDeadzonesFromMem(); // read the stick deadzone values from memory
         readButtonMappingFromMem();  // read button mapping from memory
@@ -79,15 +87,7 @@ public:
         // allows users to change old passwords without knowing current password
         if (!digitalRead(charToPinMap['X']) && !digitalRead(charToPinMap['Y'])){
             resetPasswordFlag = 1;
-        }
-        
-        // check to see if holding down y and dpad-down on boot.
-        // Will erase OTA firmware and reset to factory
-        if (!digitalRead(charToPinMap['Y']) && !digitalRead(charToPinMap['d'])){
-            eraseOTA();
-            delay(1000);
-            ESP.restart();
-        }
+        } 
         
         bluetooth.setupBLE(bt_millis_count, resetPasswordFlag);
 
@@ -159,7 +159,6 @@ private:
     char DigitalMappingMSG[35];
 
     KEGBluetooth bluetooth;
-
 
     // serial buffer array
     int buffer_holder[BufferHolderLen] = {0};
