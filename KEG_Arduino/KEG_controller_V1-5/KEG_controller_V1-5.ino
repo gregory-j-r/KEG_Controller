@@ -47,6 +47,86 @@ void IRAM_ATTR onTimer(){
 }
 
 /**
+ * @brief Use the high/low calibration values to map read value  
+*/
+int mapStickVals(int calVals[], int dead[], int val){
+    int mapped_val = 127;
+
+    int side_flag = 0 ;
+    int min_val = -1;
+    int max_val = 0;
+
+    int low = calVals[0];
+    int neutch = calVals[1];
+    int high = calVals[2];
+
+    if (low < high){
+        side_flag = 1;
+    }
+
+    if(neutch - low == 0){
+        return 127;
+    }
+
+    if(high - neutch == 0){
+        return 127;
+    }
+
+    if(side_flag){
+        if(val < neutch){
+            int a = 0;
+            int b = 127;
+
+            int min_val = low;
+            int max_val = neutch;
+
+            mapped_val = a + (val - min_val)*(b-a) / (max_val - min_val);
+        }
+        else{
+            int a = 127;
+            int b = 255;
+
+            int min_val = neutch;
+            int max_val = high;
+
+            mapped_val = a + (val - min_val)*(b-a) / (max_val - min_val);
+        }
+    }
+    else{
+        if (val > neutch){
+            int a = 0;
+            int b = 127;
+
+            int min_val = low;
+            int max_val = neutch;
+
+            mapped_val = a + (val - min_val)*(b-a) / (max_val - min_val);
+        }
+        else{
+            int a = 127;
+            int b = 255;
+
+            int min_val = neutch;
+            int max_val = high;
+
+            mapped_val = a + (val - min_val)*(b-a) / (max_val - min_val);
+        }
+    }
+
+    if(mapped_val<0){
+        return 0;
+    }
+    if(mapped_val > 255){
+        return 255;
+    }
+
+    if (mapped_val >= dead[0] && mapped_val <= dead[1]){
+        mapped_val = dead[2];
+    }
+    return mapped_val;
+}
+
+/**
  * @brief This class defines the code to setup and run a KEG controller.
  *
  */
@@ -392,7 +472,7 @@ private:
             }
 
             read_counter++;
-            if (read_counter >= 10)
+            if (read_counter >= 12)
             {
                 update_reply();
                 read_counter = 0;

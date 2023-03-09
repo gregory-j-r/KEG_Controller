@@ -89,54 +89,6 @@ void setPinsToPullup(int digital_pins[], int arrLen){
 }
 
 /**
- * @brief Use the high/low calibration values to map read value  
-*/
-int mapStickVals(int calVals[], int dead[], int value){
-    int mapped_val = -1;
-    double lowS;
-    double highS;
-    int highSGood = 0; // for checking division by 0
-    int lowSGood = 0;  // for checking division by 0
-    double val = (double)value;
-
-    int low = calVals[0];
-    int neutch = calVals[1];
-    int high = calVals[2];
-
-    // make the slopes
-    if ((high - neutch) != 0){
-        highS = 127.0 / ((double)high - (double)neutch);
-        highSGood = 1;
-    }
-    if ((neutch - low) != 0){
-        lowS = 127.0 / ((double)neutch - (double)low);
-        lowSGood = 1;
-    }
-
-    // map the value onto the line
-    if (val <= neutch && lowSGood == 1){
-        mapped_val = (int)(lowS * val - lowS * neutch + 127.0);
-    }
-    if (val > neutch && highSGood == 1){
-        mapped_val = (int)(highS * val - highS * neutch + 127.0);
-    }
-
-    // check if mapped_val exceeds the bounds
-    if (mapped_val < 0){
-        return 0;
-    }
-    if (mapped_val > 255){
-        return 255;
-    }
-
-    if (mapped_val >= dead[0] && mapped_val <= dead[1]){
-        mapped_val = dead[2];
-    }
-
-    return mapped_val;
-}
-
-/**
  * @brief Converts binary toggle to Y/N characters
 */
 char getCharFromToggle(int toggle){
