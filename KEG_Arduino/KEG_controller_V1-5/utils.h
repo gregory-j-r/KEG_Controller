@@ -168,3 +168,35 @@ void eraseOTA(){
     ESP_ERROR_CHECK(esp_partition_read(partition, 0, read_data, sizeof(read_data)));
     assert(memcmp(store_data, read_data, sizeof(read_data)) == 0);
 }
+
+
+void sort(int arr[], int size) {
+    for(int i = 0; i < size - 1; i++) {
+        for(int j = 0; j < size - 1 - i; j++) {
+            if(a[j] > a[j+1]) {
+                int temp = arr[j];
+                arr[j] = arr[j+1];
+                arr[j+1] = temp;
+            }
+        }
+    }
+    return arr;
+}
+
+int bisect(int a[], int val, int size) {
+    int lo = 0;
+    int hi = size;
+    int mid;
+
+    while (lo < hi) {
+        mid = (lo + hi) / 2;
+        
+        if (val < a[mid]) {
+            hi = mid;
+        }
+        else {
+            lo = mid + 1;
+        }
+    }
+    return lo;
+}

@@ -22,7 +22,7 @@
 
 #define OriginEndLen 9
 
-#define ButtonMappingMSGLen 35
+#define ButtonMappingMSGLen 179
 #define DigitalInLen 16
 #define AnalogInLen 6
 
@@ -46,83 +46,95 @@ void IRAM_ATTR onTimer(){
     triggered = 1;
 }
 
+int numCalibPoints = 7;
 /**
- * @brief Use the high/low calibration values to map read value  
+ * @brief Use all of octagon notches to calibrate  
+ * 
+ * @note assumes calArray is sorted
+
 */
-int mapStickVals(int calVals[], int dead[], int val){
-    int mapped_val = 127;
+int mapStickVals(int calArray[], int dead[], int val, int XorY){
+    
+    // int neutch = calArray[0];
+    // int west = calArray[1];
+    // int northWest = calArray[2];
+    // int north = calArray[3];
+    // int northEast = calArray[4];
+    // int east = calArray[5];
+    // int southEast = calArray[6];
+    // int south = calArray[7];
+    // int southWest = calArray[8];
 
-    int side_flag = 0 ;
-    int min_val = -1;
-    int max_val = 0;
+    int mapped_val;
 
-    int low = calVals[0];
-    int neutch = calVals[1];
-    int high = calVals[2];
-
-    if (low < high){
-        side_flag = 1;
-    }
-
-    if(neutch - low == 0){
-        return 127;
-    }
-
-    if(high - neutch == 0){
-        return 127;
-    }
-
-    if(side_flag){
-        if(val < neutch){
-            int a = 0;
-            int b = 127;
-
-            int min_val = low;
-            int max_val = neutch;
-
-            mapped_val = a + (val - min_val)*(b-a) / (max_val - min_val);
-        }
-        else{
-            int a = 127;
-            int b = 255;
-
-            int min_val = neutch;
-            int max_val = high;
-
-            mapped_val = a + (val - min_val)*(b-a) / (max_val - min_val);
-        }
+    if (XorY == 0){
+        // int sorted_cals[7] = {west, northWest,southWest, neutch, northEast, southEast, east};
+        bool flipped_magnet_dir = (west<east) ? false : true;
     }
     else{
-        if (val > neutch){
-            int a = 0;
-            int b = 127;
-
-            int min_val = low;
-            int max_val = neutch;
-
-            mapped_val = a + (val - min_val)*(b-a) / (max_val - min_val);
-        }
-        else{
-            int a = 127;
-            int b = 255;
-
-            int min_val = neutch;
-            int max_val = high;
-
-            mapped_val = a + (val - min_val)*(b-a) / (max_val - min_val);
-        }
+        // int sorted_cals[7] = {south, southWest,southEast, neutch, northEast, northWest, north};
+        bool flipped_magnet_dir = (south < north) ? false : true;
     }
+    
+    // TODO: store sorted array in memory/class variable
+    // sorted_cals = sort(sorted_cals, numCalibPoints);
+    
+    // TODO: Find which section val is in
+    // int index = bisect(sorted_cals, numCalibPoints);
+    int index = bisect(calArray, numCalibPoints);
 
-    if(mapped_val<0){
-        return 0;
+    if (index == 0){
+        mapped_val = 0;
     }
-    if(mapped_val > 255){
-        return 255;
-    }
+    else if (index == 1){
+        int a = 0;
+        int b = 37;
 
-    if (mapped_val >= dead[0] && mapped_val <= dead[1]){
+        int min_val = sorted_cals[0];
+        int max_val = sorted_cals[1];
+        mapped_val = round(a + (val - min_val)*(b-a) / (max_val - min_val));
+    }
+    else if (index == 2){
+        mapped_val = 37;
+    }
+    else if (index == 3){
+        int a = 37;
+        int b = 127;
+
+        int min_val = sorted_cals[2];
+        int max_val = sorted_cals[3];
+        mapped_val = round(a + (val - min_val)*(b-a) / (max_val - min_val));
+    }
+    else if (index == 4){
+        int a = 127;
+        int b = 218;
+
+        int min_val = sorted_cals[3];
+        int max_val = sorted_cals[4];
+        mapped_val = round(a + (val - min_val)*(b-a) / (max_val - min_val));
+    }
+    else if (index == 5){
+        mapped_val = 218;
+    }
+    else if (index == 6){
+        int a = 218;
+        int b = 255;
+
+        int min_val = sorted_cals[5];
+        int max_val = sorted_cals[6];
+        mapped_val = round(a + (val - min_val)*(b-a) / (max_val - min_val));
+    }
+    else if (index == numCalibPoints){
+        mapped_val = 255;
+    }
+    if(mapped_val >= dead[0] and mapped_val <= dead[1]){
         mapped_val = dead[2];
     }
+
+    if (flipped_magnet_dir){
+        return 255-mapped_val;
+    }
+    
     return mapped_val;
 }
 
@@ -237,7 +249,6 @@ private:
     int savedDeadzones = 0;
     int savedButtonMapping = 0;
     char DigitalMappingMSG[35];
-
     KEGBluetooth bluetooth;
 
     // serial buffer array
@@ -253,14 +264,17 @@ private:
     Preferences preferences;
 
     /**
-     * @brief Struct to hold the analog stick calibration params. Ordering is low, neutch, high
+     * @brief Struct to hold the analog stick calibration params. 
      *
+     * @note formatting is:
+     *         x: west, southwest*, northwest*, neutch, northeast*, southeast*, east
+     *         y: south, southwest*, southeast*, neutch, northwest*, northeast*, north
      */
     struct StickCalibrationValues{
-        int AX[3] = {};
-        int AY[3] = {};
-        int CX[3] = {};
-        int CY[3] = {};
+        int AX[7] = {};
+        int AY[7] = {};
+        int CX[7] = {};
+        int CY[7] = {};
     } stickCalVals;
 
     /**
@@ -541,19 +555,19 @@ private:
             count++;
         }
         analogMeans.aX = analogSums.ax / read_counter;
-        analogs_in[0] = mapStickVals(stickCalVals.AX, stickDeadzVals.AX, analogMeans.aX);
+        analogs_in[0] = mapStickVals(stickCalVals.AX, stickDeadzVals.AX, analogMeans.aX, 0);
         analogSums.ax = 0;
 
         analogMeans.aY = analogSums.ay / read_counter;
-        analogs_in[1] = mapStickVals(stickCalVals.AY, stickDeadzVals.AY, analogMeans.aY);
+        analogs_in[1] = mapStickVals(stickCalVals.AY, stickDeadzVals.AY, analogMeans.aY, 1);
         analogSums.ay = 0;
 
         analogMeans.cX = analogSums.cx / read_counter;
-        analogs_in[2] = mapStickVals(stickCalVals.CX, stickDeadzVals.CX, analogMeans.cX);
+        analogs_in[2] = mapStickVals(stickCalVals.CX, stickDeadzVals.CX, analogMeans.cX, 0);
         analogSums.cx = 0;
 
         analogMeans.cY = analogSums.cy / read_counter;
-        analogs_in[3] = mapStickVals(stickCalVals.CY, stickDeadzVals.CY, analogMeans.cY);
+        analogs_in[3] = mapStickVals(stickCalVals.CY, stickDeadzVals.CY, analogMeans.cY, 1);
         analogSums.cy = 0;
 
         analogMeans.aL = analogSums.al / read_counter;
@@ -958,21 +972,18 @@ private:
      *        New values stored in struct but not saved to memory unless user chooses to
      */
     void ParseCalibrationString(String str){
-        stickCalVals.AX[1] = str.substring(0, 4).toInt();
-        stickCalVals.AX[0] = str.substring(5, 9).toInt();
-        stickCalVals.AX[2] = str.substring(10, 14).toInt();
-
-        stickCalVals.AY[1] = str.substring(15, 19).toInt();
-        stickCalVals.AY[0] = str.substring(20, 24).toInt();
-        stickCalVals.AY[2] = str.substring(25, 29).toInt();
-
-        stickCalVals.CX[1] = str.substring(30, 34).toInt();
-        stickCalVals.CX[0] = str.substring(35, 39).toInt();
-        stickCalVals.CX[2] = str.substring(40, 44).toInt();
-
-        stickCalVals.CY[1] = str.substring(45, 49).toInt();
-        stickCalVals.CY[0] = str.substring(50, 54).toInt();
-        stickCalVals.CY[2] = str.substring(55, 59).toInt();
+        for (int i = 0; i < 40; i+=5) {
+            stickCalVals.AX[i / 5] = str.substring(i, i+4).toInt();
+        }
+        for (int i = 45; i < 85; i+=5) {
+            stickCalVals.AY[i / 5] = str.substring(i, i+4).toInt();
+        }
+        for (int i = 90; i < 130; i+=5) {
+            stickCalVals.CX[i / 5] = str.substring(i, i+4).toInt();
+        }
+        for (int i = 135; i < 175; i+=5) {
+            stickCalVals.CY[i / 5] = str.substring(i, i+4).toInt();
+        }
     }
     /**
      * @brief Parses deadzone string and fills stick deadzone struct with new values.
@@ -1054,12 +1065,23 @@ private:
                         savedCalib = 1;
                     }
                     else if (receivedMSG == "RAC"){
-                        char AnalogCalibMSG[59];
-                        sprintf(AnalogCalibMSG, "%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d:%04d,%04d,%04d",
-                                stickCalVals.AX[1], stickCalVals.AX[0], stickCalVals.AX[2],
-                                stickCalVals.AY[1], stickCalVals.AY[0], stickCalVals.AY[2],
-                                stickCalVals.CX[1], stickCalVals.CX[0], stickCalVals.CX[2],
-                                stickCalVals.CY[1], stickCalVals.CY[0], stickCalVals.CY[2]);
+                        char AnalogCalibMSG[179];
+                        sprintf(AnalogCalibMSG,
+                                "%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d",
+                                stickCalVals.AX[0], stickCalVals.AX[1], stickCalVals.AX[2],
+                                stickCalVals.AX[3], stickCalVals.AX[4], stickCalVals.AX[5],
+                                stickCalVals.AX[6], stickCalVals.AX[7], stickCalVals.AX[8],
+                                stickCalVals.AY[0], stickCalVals.AY[1], stickCalVals.AY[2],
+                                stickCalVals.AY[3], stickCalVals.AY[4], stickCalVals.AY[5],
+                                stickCalVals.AY[6], stickCalVals.AY[7], stickCalVals.AY[8],
+                                stickCalVals.CX[0], stickCalVals.CX[1], stickCalVals.CX[2],
+                                stickCalVals.CX[3], stickCalVals.CX[4], stickCalVals.CX[5],
+                                stickCalVals.CX[6], stickCalVals.CX[7], stickCalVals.CX[8],
+                                stickCalVals.CY[0], stickCalVals.CY[1], stickCalVals.CY[2],
+                                stickCalVals.CY[3], stickCalVals.CY[4], stickCalVals.CY[5],
+                                stickCalVals.CY[6], stickCalVals.CY[7], stickCalVals.CY[8]);
+
+        
                         Ch1.setValue(AnalogCalibMSG);
                         Ch1.notify();
                     }
