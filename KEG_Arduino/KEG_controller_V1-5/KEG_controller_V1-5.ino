@@ -54,17 +54,6 @@ int numCalibPoints = 7;
 
 */
 int mapStickVals(int calArray[], int dead[], int val, int XorY){
-    
-    // int neutch = calArray[0];
-    // int west = calArray[1];
-    // int northWest = calArray[2];
-    // int north = calArray[3];
-    // int northEast = calArray[4];
-    // int east = calArray[5];
-    // int southEast = calArray[6];
-    // int south = calArray[7];
-    // int southWest = calArray[8];
-
     int mapped_val;
 
     if (XorY == 0){
@@ -76,11 +65,7 @@ int mapStickVals(int calArray[], int dead[], int val, int XorY){
         bool flipped_magnet_dir = (south < north) ? false : true;
     }
     
-    // TODO: store sorted array in memory/class variable
-    // sorted_cals = sort(sorted_cals, numCalibPoints);
-    
     // TODO: Find which section val is in
-    // int index = bisect(sorted_cals, numCalibPoints);
     int index = bisect(calArray, numCalibPoints);
 
     if (index == 0){
@@ -92,7 +77,7 @@ int mapStickVals(int calArray[], int dead[], int val, int XorY){
 
         int min_val = sorted_cals[0];
         int max_val = sorted_cals[1];
-        mapped_val = round(a + (val - min_val)*(b-a) / (max_val - min_val));
+        mapped_val = (a + (val - min_val)*(b-a) / (max_val - min_val));
     }
     else if (index == 2){
         mapped_val = 37;
@@ -103,7 +88,7 @@ int mapStickVals(int calArray[], int dead[], int val, int XorY){
 
         int min_val = sorted_cals[2];
         int max_val = sorted_cals[3];
-        mapped_val = round(a + (val - min_val)*(b-a) / (max_val - min_val));
+        mapped_val = (a + (val - min_val)*(b-a) / (max_val - min_val));
     }
     else if (index == 4){
         int a = 127;
@@ -111,7 +96,7 @@ int mapStickVals(int calArray[], int dead[], int val, int XorY){
 
         int min_val = sorted_cals[3];
         int max_val = sorted_cals[4];
-        mapped_val = round(a + (val - min_val)*(b-a) / (max_val - min_val));
+        mapped_val = (a + (val - min_val)*(b-a) / (max_val - min_val));
     }
     else if (index == 5){
         mapped_val = 218;
@@ -122,11 +107,12 @@ int mapStickVals(int calArray[], int dead[], int val, int XorY){
 
         int min_val = sorted_cals[5];
         int max_val = sorted_cals[6];
-        mapped_val = round(a + (val - min_val)*(b-a) / (max_val - min_val));
+        mapped_val = (a + (val - min_val)*(b-a) / (max_val - min_val));
     }
     else if (index == numCalibPoints){
         mapped_val = 255;
     }
+    
     if(mapped_val >= dead[0] and mapped_val <= dead[1]){
         mapped_val = dead[2];
     }
@@ -658,33 +644,44 @@ private:
         preferences.begin("AnalogCal", false);
         uint16_t toSave;
 
-        toSave = stickCalVals.AX[1];
-        preferences.putUShort("AXNeutch", toSave);
-        toSave = stickCalVals.AX[2];
-        preferences.putUShort("AXHigh", toSave);
-        toSave = stickCalVals.AX[0];
-        preferences.putUShort("AXLow", toSave);
+        for (int i = 0; i <= numCalibPoints; i++) {
+            axID = "AX" + str(i);
+            ayID = "AY" + str(i);
+            cxID = "CX" + str(i);
+            cyID = "CY" + str(i);
+            preferences.putUShort(axID, stickCalVals.AX[i])
+            preferences.putUShort(ayID, stickCalVals.AY[i])
+            preferences.putUShort(cxID, stickCalVals.CX[i])
+            preferences.putUShort(cyID, stickCalVals.CY[i])
+        }
+      
+        // toSave = stickCalVals.AX[1];
+        // preferences.putUShort("AXNeutch", toSave);
+        // toSave = stickCalVals.AX[2];
+        // preferences.putUShort("AXHigh", toSave);
+        // toSave = stickCalVals.AX[0];
+        // preferences.putUShort("AXLow", toSave);
 
-        toSave = stickCalVals.AY[1];
-        preferences.putUShort("AYNeutch", toSave);
-        toSave = stickCalVals.AY[2];
-        preferences.putUShort("AYHigh", toSave);
-        toSave = stickCalVals.AY[0];
-        preferences.putUShort("AYLow", toSave);
+        // toSave = stickCalVals.AY[1];
+        // preferences.putUShort("AYNeutch", toSave);
+        // toSave = stickCalVals.AY[2];
+        // preferences.putUShort("AYHigh", toSave);
+        // toSave = stickCalVals.AY[0];
+        // preferences.putUShort("AYLow", toSave);
 
-        toSave = stickCalVals.CX[1];
-        preferences.putUShort("CXNeutch", toSave);
-        toSave = stickCalVals.CX[2];
-        preferences.putUShort("CXHigh", toSave);
-        toSave = stickCalVals.CX[0];
-        preferences.putUShort("CXLow", toSave);
+        // toSave = stickCalVals.CX[1];
+        // preferences.putUShort("CXNeutch", toSave);
+        // toSave = stickCalVals.CX[2];
+        // preferences.putUShort("CXHigh", toSave);
+        // toSave = stickCalVals.CX[0];
+        // preferences.putUShort("CXLow", toSave);
 
-        toSave = stickCalVals.CY[1];
-        preferences.putUShort("CYNeutch", toSave);
-        toSave = stickCalVals.CY[2];
-        preferences.putUShort("CYHigh", toSave);
-        toSave = stickCalVals.CY[0];
-        preferences.putUShort("CYLow", toSave);
+        // toSave = stickCalVals.CY[1];
+        // preferences.putUShort("CYNeutch", toSave);
+        // toSave = stickCalVals.CY[2];
+        // preferences.putUShort("CYHigh", toSave);
+        // toSave = stickCalVals.CY[0];
+        // preferences.putUShort("CYLow", toSave);
 
         preferences.end();
     }
@@ -847,21 +844,32 @@ private:
     void readStickCalFromMem(){
         preferences.begin("AnalogCal", true);
 
-        stickCalVals.AX[1] = preferences.getUShort("AXNeutch", 0); // if key not there default to 0
-        stickCalVals.AX[2] = preferences.getUShort("AXHigh", 0);
-        stickCalVals.AX[0] = preferences.getUShort("AXLow", 0);
+        for (int i = 0; i <= numCalibPoints; i++) {
+            axID = "AX" + str(i);
+            ayID = "AY" + str(i);
+            cxID = "CX" + str(i);
+            cyID = "CY" + str(i);
+            stickCalVals.AX[i] = preferences.getUShort(axID, 0)
+            stickCalVals.AY[i] = preferences.getUShort(ayID, 0)
+            stickCalVals.CX[i] = preferences.getUShort(cxID, 0)
+            stickCalVals.CY[i] = preferences.getUShort(cyID, 0)
+        }
 
-        stickCalVals.AY[1] = preferences.getUShort("AYNeutch", 0);
-        stickCalVals.AY[2] = preferences.getUShort("AYHigh", 0);
-        stickCalVals.AY[0] = preferences.getUShort("AYLow", 0);
+        // stickCalVals.AX[1] = preferences.getUShort("AXNeutch", 0); // if key not there default to 0
+        // stickCalVals.AX[2] = preferences.getUShort("AXHigh", 0);
+        // stickCalVals.AX[0] = preferences.getUShort("AXLow", 0);
 
-        stickCalVals.CX[1] = preferences.getUShort("CXNeutch", 0);
-        stickCalVals.CX[2] = preferences.getUShort("CXHigh", 0);
-        stickCalVals.CX[0] = preferences.getUShort("CXLow", 0);
+        // stickCalVals.AY[1] = preferences.getUShort("AYNeutch", 0);
+        // stickCalVals.AY[2] = preferences.getUShort("AYHigh", 0);
+        // stickCalVals.AY[0] = preferences.getUShort("AYLow", 0);
 
-        stickCalVals.CY[1] = preferences.getUShort("CYNeutch", 0);
-        stickCalVals.CY[2] = preferences.getUShort("CYHigh", 0);
-        stickCalVals.CY[0] = preferences.getUShort("CYLow", 0);
+        // stickCalVals.CX[1] = preferences.getUShort("CXNeutch", 0);
+        // stickCalVals.CX[2] = preferences.getUShort("CXHigh", 0);
+        // stickCalVals.CX[0] = preferences.getUShort("CXLow", 0);
+
+        // stickCalVals.CY[1] = preferences.getUShort("CYNeutch", 0);
+        // stickCalVals.CY[2] = preferences.getUShort("CYHigh", 0);
+        // stickCalVals.CY[0] = preferences.getUShort("CYLow", 0);
 
         preferences.end();
     }
