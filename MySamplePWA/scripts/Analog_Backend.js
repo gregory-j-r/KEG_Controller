@@ -93,23 +93,24 @@ async function handleNewAnalogData(event){
         currentLT = parseInt(AnalogValues[4]);
         currentRT = parseInt(AnalogValues[5]);
     }
-    // else if(str3.length == 179){
-    //     var AnalogCalibValues = enc.decode(value).split(':');
-    //     for(let i=0;i<8;i++){
-    //         Curr_AX_Cal_Vals[i] = AnalogCalibValues[0].split(',')[i];
-    //     }
-    //     for(let i=0;i<8;i++){
-    //         Curr_AY_Cal_Vals[i] = AnalogCalibValues[1].split(',')[i];
-    //     }
-    //     for(let i=0;i<8;i++){
-    //         Curr_CX_Cal_Vals[i] = AnalogCalibValues[2].split(',')[i];
-    //     }
-    //     for(let i=0;i<8;i++){
-    //         Curr_CY_Cal_Vals[i] = AnalogCalibValues[3].split(',')[i];
-    //     }
-    //     console.log("Got Analog Calibration Values");
-    //     document.getElementById("on screen information").innerHTML = "Got Analog Calibration Values";
-    // }
+    else if(str3.length == 139){
+        var AnalogCalibValues = enc.decode(value).split(':');
+        for(let i=0;i<7;i++){
+            Curr_AX_Cal_Vals[i] = AnalogCalibValues[0].split(',')[i];
+        }
+        for(let i=0;i<7;i++){
+            Curr_AY_Cal_Vals[i] = AnalogCalibValues[1].split(',')[i];
+        }
+        for(let i=0;i<7;i++){
+            Curr_CX_Cal_Vals[i] = AnalogCalibValues[2].split(',')[i];
+        }
+        for(let i=0;i<7;i++){
+            Curr_CY_Cal_Vals[i] = AnalogCalibValues[3].split(',')[i];
+        }
+        console.log("Got Analog Calibration Values");
+        console.log(AnalogCalibValues);
+        document.getElementById("on screen information").innerHTML = "Got Analog Calibration Values";
+    }
     else if(str3.length == 47){
         var AnalogDeadzoneValues = enc.decode(value).split(':');
         AnalogStickXDeadzone.low = AnalogDeadzoneValues[0].split(',')[0];
@@ -129,6 +130,10 @@ async function handleNewAnalogData(event){
         CStickYDeadzone.value = AnalogDeadzoneValues[3].split(',')[2];
         
         console.log("Got Analog Deadzone Values");
+        console.log("AX Deadzone = " + AnalogStickXDeadzone.low + ", " + AnalogStickXDeadzone.high + ", " + AnalogStickXDeadzone.value);
+        console.log("AY Deadzone = " + AnalogStickYDeadzone.low + ", " + AnalogStickYDeadzone.high + ", " + AnalogStickYDeadzone.value);
+        console.log("CX Deadzone = " + CStickXDeadzone.low + ", " + CStickXDeadzone.high + ", " + CStickXDeadzone.value);
+        console.log("CY Deadzone = " + CStickYDeadzone.low + ", " + CStickYDeadzone.high + ", " + CStickYDeadzone.value);
         document.getElementById("on screen information").innerHTML = "Got Analog Deadzone Values";
     }
 }
@@ -208,8 +213,7 @@ function doneCalibration(){
     done_calib_flag = 0;
     deadzones_flag = 0;
     redo_last_store_flag = 0;
-    setCurrentCalVals();
-
+    // setCurrentCalVals();
 }
 
 function finishedCalibration(){
@@ -253,10 +257,21 @@ function sendStickCalibration(){
     // msg = msg + String(CY_Cal_Vals[0]).padStart(4, '0') + "," + String(CY_Cal_Vals[1]).padStart(4, '0') + "," + String(CY_Cal_Vals[2]).padStart(4, '0') + "," + String(CY_Cal_Vals[3]).padStart(4, '0') + "," + String(CY_Cal_Vals[4]).padStart(4, '0') + "," + String(CY_Cal_Vals[5]).padStart(4, '0') + "," + String(CY_Cal_Vals[6]).padStart(4, '0') + "," + String(CY_Cal_Vals[7]).padStart(4, '0') + "," + String(CY_Cal_Vals[8]).padStart(4, '0');
     // sendMSG(msg);
 
-    msg = msg + calArrayToMSG(AX_Cal_Vals,AY_Cal_Vals) + ":";
-    msg = msg + calArrayToMSG(CX_Cal_Vals,CY_Cal_Vals);
-
-    sendMSG(msg);
+    var sum = 0;
+    for(let i=0; i<7; i++){
+        sum+=AX_Cal_Vals[i];
+        sum+=AY_Cal_Vals[i];
+        sum+=CX_Cal_Vals[i];
+        sum+=CY_Cal_Vals[i];
+    }
+    if(sum>0){
+        msg = msg + calArrayToMSG(AX_Cal_Vals,AY_Cal_Vals) + ":";
+        msg = msg + calArrayToMSG(CX_Cal_Vals,CY_Cal_Vals);
+        sendMSG(msg);
+    }
+    else{
+        console.log("No stick calibration changes made");
+    }
 }
 
 function saveCalibValues(){
