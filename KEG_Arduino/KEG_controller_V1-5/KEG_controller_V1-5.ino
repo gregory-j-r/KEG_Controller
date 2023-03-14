@@ -56,22 +56,13 @@ int numCalibPoints = 7;
  *   - {south, notch1, notch2, neutch,  notch3, notch4, north}
 
 */
-int mapStickVals(int calArray[], int sortedCalArray[], int dead[], int val, int XorY){
+int mapStickVals(int calArray[], int sortedCalArray[], int dead[], int val){
     int mapped_val = 127;
     bool flipped_magnet_dir;
-    if (XorY == 0){
-        int west = calArray[0];
-        int east = calArray[6];
-        flipped_magnet_dir = (west<east) ? false : true;
-    }
-    else{
-        int south = calArray[0];
-        int north = calArray[6];
-        flipped_magnet_dir = (south < north) ? false : true;
-    }
-    
-    // copy(calArray, sortedCalArray, numCalibPoints);
-    // sort(sortedCalArray, numCalibPoints);
+
+    int first = calArray[0];
+    int last = calArray[6];
+    flipped_magnet_dir = (first<last) ? false : true;
 
     // Find which section val is in
     int index = bisect(sortedCalArray, val, numCalibPoints);
@@ -574,19 +565,19 @@ private:
             count++;
         }
         analogMeans.aX = analogSums.ax / read_counter;
-        analogs_in[0] = mapStickVals(stickCalVals.AX, sortedStickCalVals.AX, stickDeadzVals.AX, analogMeans.aX, 0);
+        analogs_in[0] = mapStickVals(stickCalVals.AX, sortedStickCalVals.AX, stickDeadzVals.AX, analogMeans.aX);
         analogSums.ax = 0;
 
         analogMeans.aY = analogSums.ay / read_counter;
-        analogs_in[1] = mapStickVals(stickCalVals.AY, sortedStickCalVals.AY, stickDeadzVals.AY, analogMeans.aY, 1);
+        analogs_in[1] = mapStickVals(stickCalVals.AY, sortedStickCalVals.AY, stickDeadzVals.AY, analogMeans.aY);
         analogSums.ay = 0;
 
         analogMeans.cX = analogSums.cx / read_counter;
-        analogs_in[2] = mapStickVals(stickCalVals.CX, sortedStickCalVals.CX, stickDeadzVals.CX, analogMeans.cX, 0);
+        analogs_in[2] = mapStickVals(stickCalVals.CX, sortedStickCalVals.CX, stickDeadzVals.CX, analogMeans.cX);
         analogSums.cx = 0;
 
         analogMeans.cY = analogSums.cy / read_counter;
-        analogs_in[3] = mapStickVals(stickCalVals.CY, sortedStickCalVals.CY, stickDeadzVals.CY, analogMeans.cY, 1);
+        analogs_in[3] = mapStickVals(stickCalVals.CY, sortedStickCalVals.CY, stickDeadzVals.CY, analogMeans.cY);
         analogSums.cy = 0;
 
         analogMeans.aL = analogSums.al / read_counter;
