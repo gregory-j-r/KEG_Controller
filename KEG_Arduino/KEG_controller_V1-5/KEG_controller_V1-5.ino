@@ -1038,99 +1038,99 @@ private:
                     Ch1.setValue("Reset Password");
                     Ch1.notify();
                 }
+                return;
             }
-            else{
-                if (password_correct == 0){
-                    // this is just received msg?
-                    // if receivedMSG == BLEpassword && isX && isY)
-                    if ((String)Ch2.getValue().c_str() == BLEpassword && isX && isY){
-                        password_correct = 1;
-                        Ch1.setValue("Password Correct");
-                        Ch1.notify();
-                    }
-                    else{
-                        Ch1.setValue("Password Incorrect");
-                        Ch1.notify();
-                    }
+            
+            if (password_correct == 0){
+                // this is just received msg?
+                // if receivedMSG == BLEpassword && isX && isY)
+                if ((String)Ch2.getValue().c_str() == BLEpassword && isX && isY){
+                    password_correct = 1;
+                    Ch1.setValue("Password Correct");
+                    Ch1.notify();
                 }
                 else{
-                    if (receivedMSG == "A"){ // A means requesting Analog data
-                        char AnalogMSG[19] = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
-                        sprintf(AnalogMSG, "%04d,%04d,%04d,%04d,%04d,%04d", analogMeans.aX, analogMeans.aY,
-                                analogMeans.cX, analogMeans.cY,
-                                analogMeans.aL, analogMeans.aR);
-                        Ch1.setValue(AnalogMSG);
-                        Ch1.notify();
-                    }
-                    else if (fifthChar == ','){
-                        ParseCalibrationString(receivedMSG);
-                    }
-                    else if (receivedMSG == "SAC" && savedCalib == 0){ // SAC means Save Analog Calibration Values
-                        writeStickCalToMem();
-                        writeStickDeadzonesToMem();
-                        savedCalib = 1;
-                    }
-                    else if (receivedMSG == "RAC"){
-                        char AnalogCalibMSG[179];
-                        sprintf(AnalogCalibMSG,
-                                "%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d",
-                                stickCalVals.AX[0], stickCalVals.AX[1], stickCalVals.AX[2], stickCalVals.AX[3],
-                                stickCalVals.AX[4], stickCalVals.AX[5], stickCalVals.AX[6],
-                                stickCalVals.AY[0], stickCalVals.AY[1], stickCalVals.AY[2], stickCalVals.AY[3],
-                                stickCalVals.AY[4], stickCalVals.AY[5], stickCalVals.AY[6],
-                                stickCalVals.CX[0], stickCalVals.CX[1], stickCalVals.CX[2], stickCalVals.CX[3],
-                                stickCalVals.CX[4], stickCalVals.CX[5], stickCalVals.CX[6], 
-                                stickCalVals.CY[0], stickCalVals.CY[1], stickCalVals.CY[2], stickCalVals.CY[3],
-                                stickCalVals.CY[4], stickCalVals.CY[5], stickCalVals.CY[6]
-                                );
-                        Ch1.setValue(AnalogCalibMSG);
-                        Ch1.notify();
-                    }
-                    else if (fourthChar == ','){
-                        ParseDeadzoneString(receivedMSG);
-                    }
-                    else if (receivedMSG == "SSD" && savedDeadzones == 0){ // SSD = Save Stick Deadzones
-                        writeStickDeadzonesToMem();
-                        savedDeadzones = 1;
-                    }
-                    else if (thirdChar == '.'){
-                        ParseButtonMappingString(receivedMSG);
-                    }
-                    else if (receivedMSG == "RBM"){
-                        fillDigitalMappingMessage();
-                        Ch1.setValue(DigitalMappingMSG);
-                        Ch1.notify();
-                    }
-                    else if (receivedMSG == "SBM" && savedButtonMapping == 0){
-                        writeButtonMappingToMem();
-                        savedButtonMapping = 1;
-                    }
-                    else if (firstChar == 'W' && wifi_flag == 0){
-                        wifiUploadEnabled(receivedMSG);
-                        Ch1.setValue(ipAddy);
-                        Ch1.notify();
-                    }
-                    else if (firstChar == 'P' && passWriteFlag == 0){
-                        writeBLEpasswordToMem(receivedMSG.substring(1));
-                        passWriteFlag = 1;
-                    }
-                    else if (receivedMSG == "RDC"){
-                        char AnalogDeadzoneMSG[47];
-                        sprintf(AnalogDeadzoneMSG, "%03d,%03d,%03d:%03d,%03d,%03d:%03d,%03d,%03d:%03d,%03d,%03d",
-                                stickDeadzVals.AX[0], stickDeadzVals.AX[1], stickDeadzVals.AX[2],
-                                stickDeadzVals.AY[0], stickDeadzVals.AY[1], stickDeadzVals.AY[2],
-                                stickDeadzVals.CX[0], stickDeadzVals.CX[1], stickDeadzVals.CX[2],
-                                stickDeadzVals.CY[0], stickDeadzVals.CY[1], stickDeadzVals.CY[2]
-                        );
-                        Ch1.setValue(AnalogDeadzoneMSG);
-                        Ch1.notify();
-                    }
-                    else if (firstChar == 'B' && BLENameWriteFlag == 0){
-                        writeBLEName(receivedMSG.substring(1));
-                        BLENameWriteFlag = 1;
-                    }
+                    Ch1.setValue("Password Incorrect");
+                    Ch1.notify();
                 }
+                return;
             }
+
+            if (receivedMSG == "A"){ // A means requesting Analog data
+                char AnalogMSG[19] = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
+                sprintf(AnalogMSG, "%04d,%04d,%04d,%04d,%04d,%04d", analogMeans.aX, analogMeans.aY,
+                        analogMeans.cX, analogMeans.cY,
+                        analogMeans.aL, analogMeans.aR);
+                Ch1.setValue(AnalogMSG);
+                Ch1.notify();
+            }
+            else if (fifthChar == ','){
+                ParseCalibrationString(receivedMSG);
+            }
+            else if (receivedMSG == "SAC" && savedCalib == 0){ // SAC means Save Analog Calibration Values
+                writeStickCalToMem();
+                writeStickDeadzonesToMem();
+                savedCalib = 1;
+            }
+            else if (receivedMSG == "RAC"){
+                char AnalogCalibMSG[179];
+                sprintf(AnalogCalibMSG,
+                        "%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d",
+                        stickCalVals.AX[0], stickCalVals.AX[1], stickCalVals.AX[2], stickCalVals.AX[3],
+                        stickCalVals.AX[4], stickCalVals.AX[5], stickCalVals.AX[6],
+                        stickCalVals.AY[0], stickCalVals.AY[1], stickCalVals.AY[2], stickCalVals.AY[3],
+                        stickCalVals.AY[4], stickCalVals.AY[5], stickCalVals.AY[6],
+                        stickCalVals.CX[0], stickCalVals.CX[1], stickCalVals.CX[2], stickCalVals.CX[3],
+                        stickCalVals.CX[4], stickCalVals.CX[5], stickCalVals.CX[6], 
+                        stickCalVals.CY[0], stickCalVals.CY[1], stickCalVals.CY[2], stickCalVals.CY[3],
+                        stickCalVals.CY[4], stickCalVals.CY[5], stickCalVals.CY[6]
+                        );
+                Ch1.setValue(AnalogCalibMSG);
+                Ch1.notify();
+            }
+            else if (fourthChar == ','){
+                ParseDeadzoneString(receivedMSG);
+            }
+            else if (receivedMSG == "SSD" && savedDeadzones == 0){ // SSD = Save Stick Deadzones
+                writeStickDeadzonesToMem();
+                savedDeadzones = 1;
+            }
+            else if (thirdChar == '.'){
+                ParseButtonMappingString(receivedMSG);
+            }
+            else if (receivedMSG == "RBM"){
+                fillDigitalMappingMessage();
+                Ch1.setValue(DigitalMappingMSG);
+                Ch1.notify();
+            }
+            else if (receivedMSG == "SBM" && savedButtonMapping == 0){
+                writeButtonMappingToMem();
+                savedButtonMapping = 1;
+            }
+            else if (firstChar == 'W' && wifi_flag == 0){
+                wifiUploadEnabled(receivedMSG);
+                Ch1.setValue(ipAddy);
+                Ch1.notify();
+            }
+            else if (firstChar == 'P' && passWriteFlag == 0){
+                writeBLEpasswordToMem(receivedMSG.substring(1));
+                passWriteFlag = 1;
+            }
+            else if (receivedMSG == "RDC"){
+                char AnalogDeadzoneMSG[47];
+                sprintf(AnalogDeadzoneMSG, "%03d,%03d,%03d:%03d,%03d,%03d:%03d,%03d,%03d:%03d,%03d,%03d",
+                        stickDeadzVals.AX[0], stickDeadzVals.AX[1], stickDeadzVals.AX[2],
+                        stickDeadzVals.AY[0], stickDeadzVals.AY[1], stickDeadzVals.AY[2],
+                        stickDeadzVals.CX[0], stickDeadzVals.CX[1], stickDeadzVals.CX[2],
+                        stickDeadzVals.CY[0], stickDeadzVals.CY[1], stickDeadzVals.CY[2]
+                );
+                Ch1.setValue(AnalogDeadzoneMSG);
+                Ch1.notify();
+            }
+            else if (firstChar == 'B' && BLENameWriteFlag == 0){
+                writeBLEName(receivedMSG.substring(1));
+                BLENameWriteFlag = 1;
+            }            
         }
     }
 
