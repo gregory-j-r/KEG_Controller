@@ -80,49 +80,6 @@ char ipAddy[16];
 const char *host = "esp32";
 int wifi_flag = 0;
 
-// Start Login Index Page
-const char *loginIndex =
-    "<form name='loginForm'>"
-    "<table width='20%' bgcolor='A09F9F' align='center'>"
-    "<tr>"
-    "<td colspan=2>"
-    "<center><font size=4><b>ESP32 Login Page</b></font></center>"
-    "<br>"
-    "</td>"
-    "<br>"
-    "<br>"
-    "</tr>"
-    "<td>Username:</td>"
-    "<td><input type='text' size=25 name='userid'><br></td>"
-    "</tr>"
-    "<br>"
-    "<br>"
-    "<tr>"
-    "<td>Password:</td>"
-    "<td><input type='Password' size=25 name='pwd'><br></td>"
-    "<br>"
-    "<br>"
-    "</tr>"
-    "<tr>"
-    "<td><input type='submit' onclick='check(this.form)' value='Login'></td>"
-    "</tr>"
-    "</table>"
-    "</form>"
-    "<script>"
-    "function check(form)"
-    "{"
-    "if(form.userid.value=='' && form.pwd.value=='')"
-    "{"
-    "window.open('/serverIndex')"
-    "}"
-    "else"
-    "{"
-    " alert('Error Password or Username')/*displays error message*/"
-    "}"
-    "}"
-    "</script>";
-// Start Login Index Page
-
 // Start Server Index Page
 const char *serverIndex =
     "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
@@ -222,13 +179,7 @@ void wifiUploadEnabled(String Message){
             }
         }
         Serial.println("mDNS responder started");
-        /*return index page which is stored in serverIndex */
         server.on("/", HTTP_GET, [](){
-            server.sendHeader("Connection", "close");
-            server.send(200, "text/html", loginIndex);
-            }
-        );
-        server.on("/serverIndex", HTTP_GET, [](){
             server.sendHeader("Connection", "close");
             server.send(200, "text/html", serverIndex); 
             }
