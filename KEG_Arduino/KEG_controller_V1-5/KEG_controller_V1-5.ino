@@ -22,7 +22,7 @@
 
 #define OriginEndLen 9
 
-#define ButtonMappingMSGLen 179
+#define ButtonMappingMSGLen 139
 #define DigitalInLen 16
 #define AnalogInLen 6
 
@@ -47,26 +47,34 @@ void IRAM_ATTR onTimer(){
 }
 
 int numCalibPoints = 7;
+
 /**
  * @brief Use all of octagon notches to calibrate  
  * 
- * @note assumes calArray is sorted
+ * @note assumes calArray is formatted as
+ *   - {west, notch1, notch2, neutch, notch3, notch4, east}
+ *   - {south, notch1, notch2, neutch,  notch3, notch4, north}
 
 */
-int mapStickVals(int calArray[], int dead[], int val, int XorY){
-    int mapped_val;
-
+int mapStickVals(int calArray[], int sortedCalArray[], int dead[], int val, int XorY){
+    int mapped_val = 127;
+    bool flipped_magnet_dir;
     if (XorY == 0){
-        // int sorted_cals[7] = {west, northWest,southWest, neutch, northEast, southEast, east};
-        bool flipped_magnet_dir = (west<east) ? false : true;
+        int west = calArray[0];
+        int east = calArray[6];
+        flipped_magnet_dir = (west<east) ? false : true;
     }
     else{
-        // int sorted_cals[7] = {south, southWest,southEast, neutch, northEast, northWest, north};
-        bool flipped_magnet_dir = (south < north) ? false : true;
+        int south = calArray[0];
+        int north = calArray[6];
+        flipped_magnet_dir = (south < north) ? false : true;
     }
     
-    // TODO: Find which section val is in
-    int index = bisect(calArray, numCalibPoints);
+    // copy(calArray, sortedCalArray, numCalibPoints);
+    // sort(sortedCalArray, numCalibPoints);
+
+    // Find which section val is in
+    int index = bisect(sortedCalArray, val, numCalibPoints);
 
     if (index == 0){
         mapped_val = 0;
@@ -75,8 +83,8 @@ int mapStickVals(int calArray[], int dead[], int val, int XorY){
         int a = 0;
         int b = 37;
 
-        int min_val = sorted_cals[0];
-        int max_val = sorted_cals[1];
+        int min_val = sortedCalArray[0];
+        int max_val = sortedCalArray[1];
         mapped_val = (a + (val - min_val)*(b-a) / (max_val - min_val));
     }
     else if (index == 2){
@@ -86,16 +94,16 @@ int mapStickVals(int calArray[], int dead[], int val, int XorY){
         int a = 37;
         int b = 127;
 
-        int min_val = sorted_cals[2];
-        int max_val = sorted_cals[3];
+        int min_val = sortedCalArray[2];
+        int max_val = sortedCalArray[3];
         mapped_val = (a + (val - min_val)*(b-a) / (max_val - min_val));
     }
     else if (index == 4){
         int a = 127;
         int b = 218;
 
-        int min_val = sorted_cals[3];
-        int max_val = sorted_cals[4];
+        int min_val = sortedCalArray[3];
+        int max_val = sortedCalArray[4];
         mapped_val = (a + (val - min_val)*(b-a) / (max_val - min_val));
     }
     else if (index == 5){
@@ -105,8 +113,8 @@ int mapStickVals(int calArray[], int dead[], int val, int XorY){
         int a = 218;
         int b = 255;
 
-        int min_val = sorted_cals[5];
-        int max_val = sorted_cals[6];
+        int min_val = sortedCalArray[5];
+        int max_val = sortedCalArray[6];
         mapped_val = (a + (val - min_val)*(b-a) / (max_val - min_val));
     }
     else if (index == numCalibPoints){
@@ -118,6 +126,9 @@ int mapStickVals(int calArray[], int dead[], int val, int XorY){
     }
 
     if (flipped_magnet_dir){
+        if (mapped_val == 127){
+            return 127;
+        }
         return 255-mapped_val;
     }
     
@@ -262,6 +273,17 @@ private:
         int CX[7] = {};
         int CY[7] = {};
     } stickCalVals;
+
+    /**
+     * @brief Struct to hold the analog stick calibration params in sorted ascending order
+     *
+     */
+    struct SortedStickCalibrationValues{
+        int AX[7] = {};
+        int AY[7] = {};
+        int CX[7] = {};
+        int CY[7] = {};
+    } sortedStickCalVals;
 
     /**
      * @brief Sruct to hold the analog stick deadzone values. Ordering is low, neutch, high
@@ -435,6 +457,17 @@ private:
             }
         }
     }
+
+    /**
+     * @brief Called when stickCalVals is filled or updated so the two match
+     * 
+    */
+    void sortStickCalVals() {
+        sort(sortedStickCalVals.AX, numCalibPoints);
+        sort(sortedStickCalVals.AY, numCalibPoints);
+        sort(sortedStickCalVals.CX, numCalibPoints);
+        sort(sortedStickCalVals.CY, numCalibPoints);
+    }
  
     /**
      * @brief wrapper around the realtime task read_inputs. FreeRTOS task functions need to be static
@@ -472,7 +505,7 @@ private:
             }
 
             read_counter++;
-            if (read_counter >= 12)
+            if (read_counter >= 10)
             {
                 update_reply();
                 read_counter = 0;
@@ -541,19 +574,19 @@ private:
             count++;
         }
         analogMeans.aX = analogSums.ax / read_counter;
-        analogs_in[0] = mapStickVals(stickCalVals.AX, stickDeadzVals.AX, analogMeans.aX, 0);
+        analogs_in[0] = mapStickVals(stickCalVals.AX, sortedStickCalVals.AX, stickDeadzVals.AX, analogMeans.aX, 0);
         analogSums.ax = 0;
 
         analogMeans.aY = analogSums.ay / read_counter;
-        analogs_in[1] = mapStickVals(stickCalVals.AY, stickDeadzVals.AY, analogMeans.aY, 1);
+        analogs_in[1] = mapStickVals(stickCalVals.AY, sortedStickCalVals.AY, stickDeadzVals.AY, analogMeans.aY, 1);
         analogSums.ay = 0;
 
         analogMeans.cX = analogSums.cx / read_counter;
-        analogs_in[2] = mapStickVals(stickCalVals.CX, stickDeadzVals.CX, analogMeans.cX, 0);
+        analogs_in[2] = mapStickVals(stickCalVals.CX, sortedStickCalVals.CX, stickDeadzVals.CX, analogMeans.cX, 0);
         analogSums.cx = 0;
 
         analogMeans.cY = analogSums.cy / read_counter;
-        analogs_in[3] = mapStickVals(stickCalVals.CY, stickDeadzVals.CY, analogMeans.cY, 1);
+        analogs_in[3] = mapStickVals(stickCalVals.CY, sortedStickCalVals.CY, stickDeadzVals.CY, analogMeans.cY, 1);
         analogSums.cy = 0;
 
         analogMeans.aL = analogSums.al / read_counter;
@@ -642,47 +675,21 @@ private:
      */
     void writeStickCalToMem(){
         preferences.begin("AnalogCal", false);
-        uint16_t toSave;
+        // uint16_t toSave;
 
         for (int i = 0; i <= numCalibPoints; i++) {
-            axID = "AX" + str(i);
-            ayID = "AY" + str(i);
-            cxID = "CX" + str(i);
-            cyID = "CY" + str(i);
-            preferences.putUShort(axID, stickCalVals.AX[i])
-            preferences.putUShort(ayID, stickCalVals.AY[i])
-            preferences.putUShort(cxID, stickCalVals.CX[i])
-            preferences.putUShort(cyID, stickCalVals.CY[i])
+            String id = String(i);
+            String axID = "AX" + id;
+            String ayID = "AY" + id;
+            String cxID = "CX" + id;
+            String cyID = "CY" + id;
+
+            preferences.putUShort(axID.c_str(), (uint16_t)stickCalVals.AX[i]);
+            preferences.putUShort(ayID.c_str(), (uint16_t)stickCalVals.AY[i]);
+            preferences.putUShort(cxID.c_str(), (uint16_t)stickCalVals.CX[i]);
+            preferences.putUShort(cyID.c_str(), (uint16_t)stickCalVals.CY[i]);
         }
-      
-        // toSave = stickCalVals.AX[1];
-        // preferences.putUShort("AXNeutch", toSave);
-        // toSave = stickCalVals.AX[2];
-        // preferences.putUShort("AXHigh", toSave);
-        // toSave = stickCalVals.AX[0];
-        // preferences.putUShort("AXLow", toSave);
-
-        // toSave = stickCalVals.AY[1];
-        // preferences.putUShort("AYNeutch", toSave);
-        // toSave = stickCalVals.AY[2];
-        // preferences.putUShort("AYHigh", toSave);
-        // toSave = stickCalVals.AY[0];
-        // preferences.putUShort("AYLow", toSave);
-
-        // toSave = stickCalVals.CX[1];
-        // preferences.putUShort("CXNeutch", toSave);
-        // toSave = stickCalVals.CX[2];
-        // preferences.putUShort("CXHigh", toSave);
-        // toSave = stickCalVals.CX[0];
-        // preferences.putUShort("CXLow", toSave);
-
-        // toSave = stickCalVals.CY[1];
-        // preferences.putUShort("CYNeutch", toSave);
-        // toSave = stickCalVals.CY[2];
-        // preferences.putUShort("CYHigh", toSave);
-        // toSave = stickCalVals.CY[0];
-        // preferences.putUShort("CYLow", toSave);
-
+        
         preferences.end();
     }
 
@@ -845,33 +852,27 @@ private:
         preferences.begin("AnalogCal", true);
 
         for (int i = 0; i <= numCalibPoints; i++) {
-            axID = "AX" + str(i);
-            ayID = "AY" + str(i);
-            cxID = "CX" + str(i);
-            cyID = "CY" + str(i);
-            stickCalVals.AX[i] = preferences.getUShort(axID, 0)
-            stickCalVals.AY[i] = preferences.getUShort(ayID, 0)
-            stickCalVals.CX[i] = preferences.getUShort(cxID, 0)
-            stickCalVals.CY[i] = preferences.getUShort(cyID, 0)
+            String id = String(i);
+            String axID = "AX" + id;
+            String ayID = "AY" + id;
+            String cxID = "CX" + id;
+            String cyID = "CY" + id;
+            
+            stickCalVals.AX[i] = preferences.getUShort(axID.c_str(), 0);
+            sortedStickCalVals.AX[i] = preferences.getUShort(axID.c_str(), 0);
+            
+            stickCalVals.AY[i] = preferences.getUShort(ayID.c_str(), 0);
+            sortedStickCalVals.AY[i] = preferences.getUShort(axID.c_str(), 0);
+            
+            stickCalVals.CX[i] = preferences.getUShort(cxID.c_str(), 0);
+            sortedStickCalVals.CX[i] = preferences.getUShort(axID.c_str(), 0);
+            
+            stickCalVals.CY[i] = preferences.getUShort(cyID.c_str(), 0);
+            sortedStickCalVals.CY[i] = preferences.getUShort(axID.c_str(), 0);
+
         }
-
-        // stickCalVals.AX[1] = preferences.getUShort("AXNeutch", 0); // if key not there default to 0
-        // stickCalVals.AX[2] = preferences.getUShort("AXHigh", 0);
-        // stickCalVals.AX[0] = preferences.getUShort("AXLow", 0);
-
-        // stickCalVals.AY[1] = preferences.getUShort("AYNeutch", 0);
-        // stickCalVals.AY[2] = preferences.getUShort("AYHigh", 0);
-        // stickCalVals.AY[0] = preferences.getUShort("AYLow", 0);
-
-        // stickCalVals.CX[1] = preferences.getUShort("CXNeutch", 0);
-        // stickCalVals.CX[2] = preferences.getUShort("CXHigh", 0);
-        // stickCalVals.CX[0] = preferences.getUShort("CXLow", 0);
-
-        // stickCalVals.CY[1] = preferences.getUShort("CYNeutch", 0);
-        // stickCalVals.CY[2] = preferences.getUShort("CYHigh", 0);
-        // stickCalVals.CY[0] = preferences.getUShort("CYLow", 0);
-
         preferences.end();
+        sortStickCalVals();
     }
 
     /**
@@ -978,20 +979,26 @@ private:
     /**
      * @brief parses the calibration string and fills the stick calibration struct with the new values.
      *        New values stored in struct but not saved to memory unless user chooses to
+     * calvals.ax = {west, n1, n2, neutch....}
      */
     void ParseCalibrationString(String str){
-        for (int i = 0; i < 40; i+=5) {
+        for (int i = 0; i <= 30; i+=5) {
             stickCalVals.AX[i / 5] = str.substring(i, i+4).toInt();
+            sortedStickCalVals.AX[i / 5] = str.substring(i, i+4).toInt();
         }
-        for (int i = 45; i < 85; i+=5) {
-            stickCalVals.AY[i / 5] = str.substring(i, i+4).toInt();
+        for (int i = 35; i <= 65; i+=5) {
+            stickCalVals.AY[(i-35) / 5] = str.substring(i, i+4).toInt();
+            sortedStickCalVals.AY[(i-35) / 5] = str.substring(i, i+4).toInt();
         }
-        for (int i = 90; i < 130; i+=5) {
-            stickCalVals.CX[i / 5] = str.substring(i, i+4).toInt();
+        for (int i = 70; i <= 100; i+=5) {
+            stickCalVals.CX[(i-70) / 5] = str.substring(i, i+4).toInt();
+            sortedStickCalVals.CX[(i-70) / 5] = str.substring(i, i+4).toInt();
         }
-        for (int i = 135; i < 175; i+=5) {
-            stickCalVals.CY[i / 5] = str.substring(i, i+4).toInt();
+        for (int i = 105; i <= 135; i+=5) {
+            stickCalVals.CY[(i-105) / 5] = str.substring(i, i+4).toInt();
+            sortedStickCalVals.CY[(i-105) / 5] = str.substring(i, i+4).toInt();
         }
+        sortStickCalVals();
     }
     /**
      * @brief Parses deadzone string and fills stick deadzone struct with new values.
@@ -1075,21 +1082,16 @@ private:
                     else if (receivedMSG == "RAC"){
                         char AnalogCalibMSG[179];
                         sprintf(AnalogCalibMSG,
-                                "%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d",
-                                stickCalVals.AX[0], stickCalVals.AX[1], stickCalVals.AX[2],
-                                stickCalVals.AX[3], stickCalVals.AX[4], stickCalVals.AX[5],
-                                stickCalVals.AX[6], stickCalVals.AX[7], stickCalVals.AX[8],
-                                stickCalVals.AY[0], stickCalVals.AY[1], stickCalVals.AY[2],
-                                stickCalVals.AY[3], stickCalVals.AY[4], stickCalVals.AY[5],
-                                stickCalVals.AY[6], stickCalVals.AY[7], stickCalVals.AY[8],
-                                stickCalVals.CX[0], stickCalVals.CX[1], stickCalVals.CX[2],
-                                stickCalVals.CX[3], stickCalVals.CX[4], stickCalVals.CX[5],
-                                stickCalVals.CX[6], stickCalVals.CX[7], stickCalVals.CX[8],
-                                stickCalVals.CY[0], stickCalVals.CY[1], stickCalVals.CY[2],
-                                stickCalVals.CY[3], stickCalVals.CY[4], stickCalVals.CY[5],
-                                stickCalVals.CY[6], stickCalVals.CY[7], stickCalVals.CY[8]);
-
-        
+                                "%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d",
+                                stickCalVals.AX[0], stickCalVals.AX[1], stickCalVals.AX[2], stickCalVals.AX[3],
+                                stickCalVals.AX[4], stickCalVals.AX[5], stickCalVals.AX[6],
+                                stickCalVals.AY[0], stickCalVals.AY[1], stickCalVals.AY[2], stickCalVals.AY[3],
+                                stickCalVals.AY[4], stickCalVals.AY[5], stickCalVals.AY[6],
+                                stickCalVals.CX[0], stickCalVals.CX[1], stickCalVals.CX[2], stickCalVals.CX[3],
+                                stickCalVals.CX[4], stickCalVals.CX[5], stickCalVals.CX[6], 
+                                stickCalVals.CY[0], stickCalVals.CY[1], stickCalVals.CY[2], stickCalVals.CY[3],
+                                stickCalVals.CY[4], stickCalVals.CY[5], stickCalVals.CY[6]
+                                );
                         Ch1.setValue(AnalogCalibMSG);
                         Ch1.notify();
                     }

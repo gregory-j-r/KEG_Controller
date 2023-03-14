@@ -169,18 +169,16 @@ void eraseOTA(){
     assert(memcmp(store_data, read_data, sizeof(read_data)) == 0);
 }
 
-
-void sort(int arr[], int size) {
+void sort(int (&a)[7], int size) {
     for(int i = 0; i < size - 1; i++) {
         for(int j = 0; j < size - 1 - i; j++) {
             if(a[j] > a[j+1]) {
-                int temp = arr[j];
-                arr[j] = arr[j+1];
-                arr[j+1] = temp;
+                int temp = a[j];
+                a[j] = a[j+1];
+                a[j+1] = temp;
             }
         }
     }
-    return arr;
 }
 
 int bisect(int a[], int val, int size) {
@@ -199,4 +197,10 @@ int bisect(int a[], int val, int size) {
         }
     }
     return lo;
+}
+
+void copy(int* src, int* dst, int len) {
+    for (int i = 0; i < len; i++) {
+        dst[i] = src[i];
+    }
 }
