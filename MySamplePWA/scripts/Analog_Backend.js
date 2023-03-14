@@ -64,10 +64,15 @@ function requestAnalogReadings(){
                     ANALOG_CH = characteristic;
                     characteristic.addEventListener("characteristicvaluechanged",handleNewAnalogData);
                     characteristic.startNotifications();
+
                     console.log("Analog Notifications enabled");
                     setTimeout(() => {
-                        sendMSG("A");
-                      }, 1000);
+                        sendMSG("RDC");
+                        console.log("Analog Notifications enabled");
+                        setTimeout(() => {
+                            sendMSG("A");
+                        }, 2000);
+                      }, 2000); 
                 }
                 return 0;
             })
@@ -282,7 +287,14 @@ function saveCalibValues(){
 function requestAnalogCalibration(){
     if(get_current_cal_flag == 1){
         sendMSG("RAC");
-        get_current_cal_flag = 2;
+        setTimeout(() => {
+            sendMSG("RDC");
+            console.log("Analog Notifications enabled");
+            setTimeout(() => {
+                sendMSG("A");
+            }, 2000);
+          }, 2000); 
+        // get_current_cal_flag = 2;
     }
     else{
         if(get_current_cal_flag == 2){

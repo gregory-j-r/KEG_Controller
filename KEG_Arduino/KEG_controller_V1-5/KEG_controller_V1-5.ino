@@ -126,8 +126,8 @@ int mapStickVals(int calArray[], int sortedCalArray[], int dead[], int val, int 
     }
 
     if (flipped_magnet_dir){
-        if (mapped_val == 127){
-            return 127;
+        if (index == 3 || index == 4){
+            return 254 - mapped_val;
         }
         return 255-mapped_val;
     }

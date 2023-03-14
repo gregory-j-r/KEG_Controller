@@ -79,7 +79,7 @@ function parseScreenClick(event){
                 deadzones_colour_flag = 0;
               }, button_colour_delay);
 
-            sendMSG("RDC");
+            // sendMSG("RDC");
             setTimeout(() => {
                 editDeadzones();
             }, 1000);

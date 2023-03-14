@@ -472,6 +472,9 @@ function mapStickVals(calArray, val, XorY, dead, printFlag=0){
     }
 
     if(flipped_magnet_dir == true){
+        if (mapped_val == 127){
+            return 127
+        }
         return 255-mapped_val;
     }
 
