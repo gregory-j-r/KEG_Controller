@@ -1188,6 +1188,19 @@ private:
                 writeBLEName(receivedMSG.substring(1));
                 BLENameWriteFlag = 1;
             }            
+            else if (receivedMSG == "D"){
+                char digitalInputsMsg[16];
+
+                sprintf(digitalInputsMsg, "%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d",
+                        buttons_in[0], buttons_in[1], buttons_in[2], buttons_in[3],
+                        buttons_in[4], buttons_in[5], buttons_in[6], buttons_in[7],
+                        buttons_in[8], buttons_in[9], buttons_in[10], buttons_in[11],
+                        buttons_in[12], buttons_in[13], buttons_in[14], buttons_in[15]
+                );
+                Ch1.setValue(digitalInputsMsg);
+                Ch1.notify();
+
+            }
         }
     }
 
