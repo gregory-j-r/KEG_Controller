@@ -3,7 +3,7 @@ var WIFI_CH;
 var hosted_page = "";
 const github_bin_address = "https://github.com/gregory-j-r/KEG_Controller/tree/main/KEG_Arduino";
 var wifiInterval;
-
+const github_release_page = "https://github.com/gregory-j-r/KEG_Controller/releases";
 
 function enableWifiUpload(){
     if(password_correct){
@@ -59,6 +59,10 @@ function redirectPage(){
     if(hosted_page != ""){
         window.open("http://"+hosted_page, '_blank').focus();
     }
+}
+
+function goToGithub(){
+    window.open(github_release_page, '_blank1').focus();
 }
 
 

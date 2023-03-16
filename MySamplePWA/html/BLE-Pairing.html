@@ -14,9 +14,11 @@
     <button style="font-size : 28px;height:50px;width:140px;position:absolute;top:80px;left:298px;" onclick="enableWifiUpload()">Update</button>
     <button style="font-size : 28px;height:50px;width:140px;position:absolute;top:80px;left:443px;" onclick="requestAnalogReadings()">Analog</button>
     <button style="font-size : 28px;height:50px;width:140px;position:absolute;top:80px;left:588px;" onclick="requestDigitalReadings()">Digital</button>
-    <button style="font-size : 28px;height:50px;width:140px;" ></button> <!-- for spacing temporarilly -->
+    <button style="font-size : 28px;height:50px;width:140px;position:absolute;top:20px;left:235px; background-color:rgba(255,255,255,0.0); border:none;" id="githubButton;" onclick="goToGithub();"><img src="/../githubIcon.png" /></button>
+    <button style="font-size : 28px;height:50px;width:140px;" ></button> <!--  for spacing temporarilly-->
     
-    <div id="on screen information" type="button" style="position:fixed; left:350px; top:30px; font-size:25px" onclick="redirectPage()">Click Connect To Pair Controller</div>
+    <div id="on screen information" type="button" style="position:absolute; left:350px; top:30px; font-size:25px" onclick="redirectPage()">Click Connect To Pair Controller</div>
+    
 
     <div id="popup" style="width:400px;height:200px;padding:0px;background-color:white;position:absolute;top:0px;left:100px;display:none;font-size : 28px; border-radius: 10px;">
       <div style="position:absolute; top: 20px;left:50px">Enter SSID & Password:</div>
@@ -48,6 +50,39 @@
       <button onclick="doneNewBLEName()" style="position:absolute; top: 170px;left:270px; font-size : 20px;">Done</button>
       <button onclick="closeNewBLEName()" style="position:absolute; top: 170px;left:25px; font-size : 20px;">Close</button>
     </div>
+
+    <div id="analog_deadzone_popup" style="width:400px;height:200px;padding:0px;background-color:white;position:absolute;top:0px;left:100px;display:none;font-size : 28px; border-radius: 10px;">
+      <div style="position:absolute; top: 10px;left:10px">Edit Analog Stick Deadzones</div>
+      <div id="AnalogDeadzoneMSG" style="position:absolute; top: 40px;left:10px;font-size : 10px;">Deadzone MSG Here</div>   
+      <div style="position:absolute; top: 50px;left:150px; font-size : 20px;">Low &#8804 Value &#8804 High</div>   
+      <div style="position:absolute; top: 75px;left:30px; font-size : 20px;">AX:</div>
+      <input id="AXDeadLow" style="position:absolute; top: 75px;left:150px; width: 50px;"/>
+      <input id="AXDeadVal" style="position:absolute; top: 75px;left:205px; width: 50px;"/>
+      <input id="AXDeadHigh" style="position:absolute; top: 75px;left:260px; width: 50px;"/>
+      <div style="position:absolute; top: 125px;left:30px; font-size : 20px;">AY:</div>
+      <input id="AYDeadLow" style="position:absolute; top: 125px;left:150px; width: 50px"/>
+      <input id="AYDeadVal" style="position:absolute; top: 125px;left:205px; width: 50px"/>
+      <input id="AYDeadHigh" style="position:absolute; top: 125px;left:260px; width: 50px"/>
+      <button onclick="doneAnalogDeadzone()" style="position:absolute; top: 170px;left:270px; font-size : 20px;">Done</button>
+      <button onclick="closeAnalogDeadzone()" style="position:absolute; top: 170px;left:25px; font-size : 20px;">Close</button>
+    </div>
+
+    <div id="CStick_deadzone_popup" style="width:400px;height:200px;padding:0px;background-color:white;position:absolute;top:0px;left:100px;display:none;font-size : 28px; border-radius: 10px;">
+      <div style="position:absolute; top: 10px;left:10px">Edit C-Stick Deadzones</div>
+      <div id="CStickDeadzoneMSG" style="position:absolute; top: 40px;left:10px;font-size : 10px;">Deadzone MSG Here</div>  
+      <div style="position:absolute; top: 50px;left:150px; font-size : 20px;">Low &#8804 Value &#8804 High</div>  
+      <div style="position:absolute; top: 75px;left:30px; font-size : 20px;">CX:</div>
+      <input id="CXDeadLow" style="position:absolute; top: 75px;left:150px; width: 50px;"/>
+      <input id="CXDeadVal" style="position:absolute; top: 75px;left:205px; width: 50px;"/>
+      <input id="CXDeadHigh" style="position:absolute; top: 75px;left:260px; width: 50px;"/>
+      <div style="position:absolute; top: 125px;left:30px; font-size : 20px;">CY:</div>
+      <input id="CYDeadLow" style="position:absolute; top: 125px;left:150px; width: 50px"/>
+      <input id="CYDeadVal" style="position:absolute; top: 125px;left:205px; width: 50px"/>
+      <input id="CYDeadHigh" style="position:absolute; top: 125px;left:260px; width: 50px"/>
+      <button onclick="doneCStickDeadzone()" style="position:absolute; top: 170px;left:270px; font-size : 20px;">Done</button>
+      <button onclick="closeCStickDeadzone()" style="position:absolute; top: 170px;left:25px; font-size : 20px;">Close</button>
+    </div>
+    
 
     <p id="demo"></p>
 
