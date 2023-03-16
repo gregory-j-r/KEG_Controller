@@ -64,6 +64,9 @@ function parseScreenClick(event){
               }, button_colour_delay);
 
             sendStickCalibration();
+            setTimeout(() => {
+                sendStickDeadzones();
+              }, 1000);
         }
         if(save_calib_flag && ctx.isPointInPath(save_calib_rect, x, y)){
             save_calib_colour_flag = 1;
@@ -81,8 +84,55 @@ function parseScreenClick(event){
 
             // sendMSG("RDC");
             setTimeout(() => {
-                editDeadzones();
+                // editDeadzones();
+                showDeadzonePopup();
             }, 1000);
+        }
+        if(toggle_triggers_flag && ctx.isPointInPath(toggle_L_trigger_rect,x,y)){
+            toggle_L_trigger_colour_flag = 1;
+            setTimeout(() => {
+                toggle_L_trigger_colour_flag = 0;
+              }, button_colour_delay);
+            setTimeout(() => {
+                sendMSG("A");
+              }, 1000);
+            if(L_Trigger_on){
+                L_Trigger_on = 0;
+            }
+            else{
+                L_Trigger_on = 1;
+            }
+            var trig_msg = "T" + L_Trigger_on.toString() + R_Trigger_on.toString();
+            sendMSG(trig_msg);
+        }
+        if(toggle_triggers_flag && ctx.isPointInPath(toggle_R_trigger_rect,x,y)){
+            toggle_R_trigger_colour_flag = 1;
+            setTimeout(() => {
+                toggle_R_trigger_colour_flag = 0;
+              }, button_colour_delay);
+            setTimeout(() => {
+                sendMSG("A");
+            }, 1000);
+            if(R_Trigger_on){
+                R_Trigger_on = 0;
+            }
+            else{
+                R_Trigger_on = 1;
+            }
+            var trig_msg = "T" + L_Trigger_on.toString() + R_Trigger_on.toString();
+            sendMSG(trig_msg);
+        }
+        if(toggle_stick_raw_flag && ctx.isPointInPath(toggle_stick_raw_rect,x,y)){
+            toggle_stick_raw_colour_flag = 1;
+            setTimeout(() => {
+                toggle_stick_raw_colour_flag = 0;
+              }, button_colour_delay);
+            if(stick_raw_on_flag){
+                stick_raw_on_flag = 0;
+            }
+            else{
+                stick_raw_on_flag = 1;
+            }
         }
         if(trigger_flag && ctx.isPointInPath(left_trig_base_path, x, y)){
             console.log("Left trigger clicked");
@@ -218,6 +268,8 @@ function onAnalogStickClick(){
     store_val_flag = 1;
     done_calib_flag = 1;
     deadzones_flag = 1;
+    toggle_triggers_flag = 0;
+    toggle_stick_raw_flag = 0;
     storageCounter = 0;
 }
 
@@ -226,6 +278,8 @@ function onCStickClick(){
     store_val_flag = 1;
     done_calib_flag = 1;
     deadzones_flag = 1;
+    toggle_triggers_flag = 0;
+    toggle_stick_raw_flag = 0;
 }
 
 function onGCSimButtonClicked(tag){

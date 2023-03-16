@@ -70,9 +70,12 @@ function requestAnalogReadings(){
                         sendMSG("RDC");
                         console.log("Analog Notifications enabled");
                         setTimeout(() => {
-                            sendMSG("A");
-                        }, 2000);
-                      }, 2000); 
+                            sendMSG("RTT");
+                            setTimeout(() => {
+                                sendMSG("A");
+                            }, 1000);
+                        }, 1000);
+                    }, 1000); 
                 }
                 return 0;
             })
@@ -140,6 +143,12 @@ async function handleNewAnalogData(event){
         console.log("CX Deadzone = " + CStickXDeadzone.low + ", " + CStickXDeadzone.high + ", " + CStickXDeadzone.value);
         console.log("CY Deadzone = " + CStickYDeadzone.low + ", " + CStickYDeadzone.high + ", " + CStickYDeadzone.value);
         document.getElementById("on screen information").innerHTML = "Got Analog Deadzone Values";
+    }
+    else if(str3.length == 2){
+        var TriggerToggling = enc.decode(value);
+        L_Trigger_on = parseInt(TriggerToggling[0]);
+        R_Trigger_on = parseInt(TriggerToggling[1]);
+        console.log("Got trigger toggling = " + L_Trigger_on + "," + R_Trigger_on);
     }
 }
 
@@ -218,6 +227,8 @@ function doneCalibration(){
     done_calib_flag = 0;
     deadzones_flag = 0;
     redo_last_store_flag = 0;
+    toggle_triggers_flag = 1;
+    toggle_stick_raw_flag = 1;
     // setCurrentCalVals();
 }
 
@@ -233,6 +244,8 @@ function finishedCalibration(){
     redo_last_store_flag = 0;
     deadzones_flag = 0;
     trigger_flag = 0;
+    toggle_triggers_flag = 0;
+    toggle_stick_raw_flag = 0;
 
     in_window_index = 0;
 
@@ -277,6 +290,7 @@ function sendStickCalibration(){
     else{
         console.log("No stick calibration changes made");
     }
+
 }
 
 function saveCalibValues(){
@@ -291,9 +305,12 @@ function requestAnalogCalibration(){
             sendMSG("RDC");
             console.log("Analog Notifications enabled");
             setTimeout(() => {
-                sendMSG("A");
-            }, 2000);
-          }, 2000); 
+                sendMSG("RTT");
+                setTimeout(() => {
+                    sendMSG("A");
+                }, 1000);
+            }, 1000);
+        }, 1000); 
         // get_current_cal_flag = 2;
     }
     else{
@@ -305,110 +322,135 @@ function requestAnalogCalibration(){
 }
 
 
+function showDeadzonePopup(){
+    if(storageCounter < 9 && store_val_flag){
+        document.getElementById("AXDeadLow").value = AnalogStickXDeadzone.low.toString()
+        document.getElementById("AXDeadHigh").value = AnalogStickXDeadzone.high.toString()
+        document.getElementById("AXDeadVal").value = AnalogStickXDeadzone.value.toString();
+        document.getElementById("AYDeadLow").value = AnalogStickYDeadzone.low.toString()
+        document.getElementById("AYDeadHigh").value = AnalogStickYDeadzone.high.toString()
+        document.getElementById("AYDeadVal").value = AnalogStickYDeadzone.value.toString();
 
-function editDeadzones(){
-    // read input from user
-    const ASXDStr = window.prompt("Enter Analog Stick X-Axis Deadzone\nformat: low, high, value\nwhere [low,high] --> value\nrecommended low<118, high>136, value = 127").split(",");
-    const ASYDStr = window.prompt("Enter Analog Stick Y-Axis Deadzone\nformat: low, high, value\nwhere [low,high] --> value\nrecommended low<118, high>136, value = 127").split(",");
-    const CSXDStr = window.prompt("Enter C-Stick X-Axis Deadzone\nformat: low, high, value\nwhere [low,high] --> value\nrecommended low<118, high>136, value = 127").split(",");
-    const CSYDStr = window.prompt("Enter C-Stick Y-Axis Deadzone\nformat: low, high, value\nwhere [low,high] --> value\nrecommended low<118, high>136, value = 127").split(",");
-    console.log("Deadzones set to:");
-    // convert to integer
-    var l = parseInt(ASXDStr[0]);
-    var h = parseInt(ASXDStr[1]);
-    var v = parseInt(ASXDStr[2]);
-    // make sure all inputs read ok
+        document.getElementById("analog_deadzone_popup").style.display = "block";
+        document.getElementById("analog_deadzone_popup").addEventListener("keyup", handleEnterChangeADeadzone);
+    }
+    else{
+        document.getElementById("CXDeadLow").value = CStickXDeadzone.low.toString()
+        document.getElementById("CXDeadHigh").value = CStickXDeadzone.high.toString()
+        document.getElementById("CXDeadVal").value = CStickXDeadzone.value.toString();
+        document.getElementById("CYDeadLow").value = CStickYDeadzone.low.toString()
+        document.getElementById("CYDeadHigh").value = CStickYDeadzone.high.toString()
+        document.getElementById("CYDeadVal").value = CStickYDeadzone.value.toString();
+
+        document.getElementById("CStick_deadzone_popup").style.display = "block";
+        document.getElementById("CStick_deadzone_popup").addEventListener("keyup", handleEnterChangeCDeadzone);
+    }
+}
+
+function doneAnalogDeadzone(){
+    const AXDL = parseInt(document.getElementById("AXDeadLow").value);
+    const AXDH = parseInt(document.getElementById("AXDeadHigh").value);
+    const AXDV = parseInt(document.getElementById("AXDeadVal").value);
+    const AYDL = parseInt(document.getElementById("AYDeadLow").value);
+    const AYDH = parseInt(document.getElementById("AYDeadHigh").value);
+    const AYDV = parseInt(document.getElementById("AYDeadVal").value);
+
+    var checksum = 0;
+
+    if(checkDeadzones(AXDL,AXDH,AXDV)){
+        AnalogStickXDeadzone.low = AXDL;
+        AnalogStickXDeadzone.high = AXDH;
+        AnalogStickXDeadzone.value = AXDV;
+        checksum++;
+    }
+    if(checkDeadzones(AYDL,AYDH,AYDV)){
+        AnalogStickYDeadzone.low = AYDL;
+        AnalogStickYDeadzone.high = AYDH;
+        AnalogStickYDeadzone.value = AYDV;
+        checksum++;
+    }
+    if(checksum == 2){
+        closeAnalogDeadzone();
+    }
+    else{
+        document.getElementById("AnalogDeadzoneMSG").innerHTML = "One or more deadzone ranges is invalid";
+    }
+}
+
+function closeAnalogDeadzone(){
+    document.getElementById("analog_deadzone_popup").style.display = "none";
+    document.getElementById("analog_deadzone_popup").removeEventListener("keyup",handleEnterChangeADeadzone);
+}
+
+function doneCStickDeadzone(){
+    const CXDL = parseInt(document.getElementById("CXDeadLow").value);
+    const CXDH = parseInt(document.getElementById("CXDeadHigh").value);
+    const CXDV = parseInt(document.getElementById("CXDeadVal").value);
+    const CYDL = parseInt(document.getElementById("CYDeadLow").value);
+    const CYDH = parseInt(document.getElementById("CYDeadHigh").value);
+    const CYDV = parseInt(document.getElementById("CYDeadVal").value);
+
+    var checksum = 0;
+
+    if(checkDeadzones(CXDL,CXDH,CXDV)){
+        CStickXDeadzone.low = CXDL;
+        CStickXDeadzone.high = CXDH;
+        CStickXDeadzone.value = CXDV;
+        checksum++;
+    }
+    if(checkDeadzones(CYDL,CYDH,CYDV)){
+        CStickYDeadzone.low = CYDL;
+        CStickYDeadzone.high = CYDH;
+        CStickYDeadzone.value = CYDV;
+        checksum++;
+    }
+    if(checksum == 2){
+        closeCStickDeadzone();
+    }
+    else{
+        document.getElementById("CStickDeadzoneMSG").innerHTML = "One or more deadzone ranges is invalid";
+    }
+}
+
+function closeCStickDeadzone(){
+    document.getElementById("CStick_deadzone_popup").style.display = "none";
+    document.getElementById("CStick_deadzone_popup").removeEventListener("keyup",handleEnterChangeCDeadzone);
+}
+
+function handleEnterChangeADeadzone(event){
+    event.preventDefault();
+    if (event.key === "Enter") {
+        doneAnalogDeadzone();
+    }
+}
+
+function handleEnterChangeCDeadzone(event){
+    event.preventDefault();
+    if (event.key === "Enter") {
+        doneCStickDeadzone();
+    }
+}
+
+function checkDeadzones(l,h,v){
     if(!isNaN(l)&&!isNaN(h)&&!isNaN(v)){
         if(l>h){
-            console.log("Analog X low bound of " + l + " is larger than the high bound of " + h);
+            console.log("low bound of " + l + " is larger than the high bound of " + h);
         }
         else if(v>h || v<l){
-            console.log("Analog X deadzone value of " + v + " is not within the given bounds [" + l + "," + h +"]");
+            console.log("deadzone value of " + v + " is not within the given bounds [" + l + "," + h +"]");
         }
         else if(l <0 || h > 255){
-            console.log("Analog X deadzone bounds [" + l + "," + h +"] exceed controller limits [0,255]");
+            console.log("deadzone bounds [" + l + "," + h +"] exceed controller limits [0,255]");
         }
         else{
-            AnalogStickXDeadzone.low = l;
-            AnalogStickXDeadzone.high = h;
-            AnalogStickXDeadzone.value = v;
-            console.log("AX = " + l + ", " + h + ", " + v);
+            console.log(l + ", " + h + ", " + v);
+            return 1;
         }
     }
     else{
         console.log("One or more Analog Stick X deadzone values were not integers");
     }
-    // repeat
-    l = parseInt(ASYDStr[0]);
-    h = parseInt(ASYDStr[1]);
-    v = parseInt(ASYDStr[2]);
-    if(!isNaN(l)&&!isNaN(h)&&!isNaN(v)){
-        if(l>h){
-            console.log("Analog Y low bound of " + l + " is larger than the high bound of " + h);
-        }
-        else if(v>h || v<l){
-            console.log("Analog Y deadzone value of " + v + " is not within the given bounds [" + l + "," + h +"]");
-        }
-        else if(l <0 || h > 255){
-            console.log("Analog Y deadzone bounds [" + l + "," + h +"] exceed controller limits [0,255]");
-        }
-        else{
-            AnalogStickYDeadzone.low = l;
-            AnalogStickYDeadzone.high = h;
-            AnalogStickYDeadzone.value = v;
-            console.log("AY = " + l + ", " + h + ", " + v);
-        }
-    }
-    else{
-        console.log("One or more Analog Stick Y deadzone values were not integers");
-    }
-    l = parseInt(CSXDStr[0]);
-    h = parseInt(CSXDStr[1]);
-    v = parseInt(CSXDStr[2]);
-    if(!isNaN(l)&&!isNaN(h)&&!isNaN(v)){
-        if(l>h){
-            console.log("C-Stick X low bound of " + l + " is larger than the high bound of " + h);
-        }
-        else if(v>h || v<l){
-            console.log("C-Stick X deadzone value of " + v + " is not within the given bounds [" + l + "," + h +"]");
-        }
-        else if(l <0 || h > 255){
-            console.log("C-Stick X deadzone bounds [" + l + "," + h +"] exceed controller limits [0,255]");
-        }
-        else{
-            CStickXDeadzone.low = l;
-            CStickXDeadzone.high = h;
-            CStickXDeadzone.value = v;
-            console.log("CX = " + l + ", " + h + ", " + v);
-        }
-    }
-    else{
-        console.log("One or more C-Stick X deadzone values were not integers");
-    }
-    l = parseInt(CSYDStr[0]);
-    h = parseInt(CSYDStr[1]);
-    v = parseInt(CSYDStr[2]);
-    if(!isNaN(l)&&!isNaN(h)&&!isNaN(v)){
-        if(l>h){
-            console.log("C-Stick Y low bound of " + l + " is larger than the high bound of " + h);
-        }
-        else if(v>h || v<l){
-            console.log("C-Stick Y deadzone value of " + v + " is not within the given bounds [" + l + "," + h +"]");
-        }
-        else if(l <0 || h > 255){
-            console.log("C-Stick Y deadzone bounds [" + l + "," + h +"] exceed controller limits [0,255]");
-        }
-        else{
-            CStickYDeadzone.low = l;
-            CStickYDeadzone.high = h;
-            CStickYDeadzone.value = v;
-            console.log("CY = " + l + ", " + h + ", " + v);
-        }
-    }
-    else{
-        console.log("One or more C-Stick Y deadzone values were not integers");
-    }
-    sendStickDeadzones();
+    return 0;
 }
 
 function sendStickDeadzones(){

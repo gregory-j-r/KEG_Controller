@@ -17,7 +17,7 @@ function requestDigitalReadings(){
             finishedCalibration();
             DigitalInter();
             in_window_index = 2;
-            var msg = "D";
+            var msg = "RBM";
             sendMSG(msg);
             console.log("Requesting digital data");
             BLE_Server.getPrimaryService("4fafc201-1fb5-459e-8fcc-c5c9c331914b")
@@ -30,6 +30,9 @@ function requestDigitalReadings(){
                     characteristic.addEventListener("characteristicvaluechanged",handleNewDigitalData);
                     characteristic.startNotifications();
                     console.log("Digital Notifications enabled");
+                    setTimeout(() => {
+                        sendMSG("D");
+                    }, 1000);
                 }
                 return 0;
             })
@@ -52,7 +55,7 @@ async function handleNewDigitalData(event){
         let keys =[ ...Digital_Button_Map.keys() ];
         for(let i=0; i<12; i++){
             Digital_Button_Map.set(keys[i],split_read[i][0]);
-            Toggle_Map.set(keys[i],split_read[i][1]);
+            Toggle_Map.set(Digital_Button_Map.get(keys[i]),split_read[i][1]);
         }
         // console.log([...Digital_Button_Map.entries()]);
         // console.log([...Toggle_Map.entries()]);
