@@ -22,7 +22,7 @@
 
 #define OriginEndLen 9
 
-#define ButtonMappingMSGLen 139
+#define ButtonMappingMSGLen 35
 #define DigitalInLen 16
 #define AnalogInLen 6
 
@@ -148,11 +148,12 @@ public:
             ESP.restart();
         }
 
-        readStickCalFromMem();       // read the stick calibration values from memory
-        readStickDeadzonesFromMem(); // read the stick deadzone values from memory
-        readButtonMappingFromMem();  // read button mapping from memory
-        readBLEpasswordFromMem();    // read BLE Password from memory
-        readBLENameFromMem();        // read BLEName from memory
+        readStickCalFromMem();        // read the stick calibration values from memory
+        readStickDeadzonesFromMem();  // read the stick deadzone values from memory
+        readButtonMappingFromMem();   // read button mapping from memory
+        readTriggerTogglingFromMem(); // read trigger toggling from memory
+        readBLEpasswordFromMem();     // read BLE Password from memory
+        readBLENameFromMem();         // read BLEName from memory
 
         adc1_config_width(ADC_WIDTH_BIT_12);
         adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_11); // GPIO 34
@@ -250,6 +251,10 @@ private:
 
     // esp32 class for writing to memory (save settings)
     Preferences preferences;
+
+    // trigger toggle flags
+    int ltON = 1;
+    int rtON = 1;
 
     /**
      * @brief Struct to hold the analog stick calibration params. 
@@ -580,15 +585,31 @@ private:
         analogs_in[3] = mapStickVals(stickCalVals.CY, sortedStickCalVals.CY, stickDeadzVals.CY, analogMeans.cY);
         analogSums.cy = 0;
 
-        analogMeans.aL = analogSums.al / read_counter;
-        //  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,aL);
-        analogs_in[4] = analogMeans.aL;
-        analogSums.al = 0;
+        if (ltON){
+            analogMeans.aL = analogSums.al / read_counter;
+            //  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,aL);
+            analogs_in[4] = analogMeans.aL;
+            analogSums.al = 0;
+        }
+        else {
+            analogMeans.aL = analogSums.al / read_counter;
+            //  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,aL);
+            analogs_in[4] = 0;
+            analogSums.al = 0;
+        }
 
-        analogMeans.aR = analogSums.ar / read_counter;
-        //  analogs_in[5] = mapTriggerVals(RTHigh,RTLow,aR);
-        analogs_in[5] = analogMeans.aR;
-        analogSums.ar = 0;
+        if (rtON){
+            analogMeans.aR = analogSums.ar / read_counter;
+            //  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,aL);
+            analogs_in[5] = analogMeans.aR;
+            analogSums.ar = 0;
+        }
+        else {
+            analogMeans.aR = analogSums.ar / read_counter;
+            //  analogs_in[4] = mapTriggerVals(LTHigh,LTLow,aL);
+            analogs_in[5] = 0;
+            analogSums.ar = 0;
+        }
 
         int analog_value = 0;
         for (int k = 0; k < AnalogInLen; k++){
@@ -791,6 +812,17 @@ private:
 
         preferences.end();
     }
+    
+    /**
+     * @brief write trigger toggling to memory
+    */
+    void writeTriggerTogglingToMem(){
+         preferences.begin("Triggers", false);
+         preferences.putUShort("LTT", (uint16_t) ltON);
+         preferences.putUShort("RTT", (uint16_t) rtON);
+         preferences.end();
+    
+    }
 
     /**
      * @brief write BLEpassword to memory
@@ -832,6 +864,17 @@ private:
         stickDeadzVals.CY[0] = preferences.getUShort("CYDeadLow", 117);
         stickDeadzVals.CY[1] = preferences.getUShort("CYDeadHigh", 137);
         stickDeadzVals.CY[2] = preferences.getUShort("CYDeadVal", 127);
+
+        preferences.end();
+    }
+    /**
+     * @brief Reads the trigger toggles from memory
+     */
+    void readTriggerTogglingFromMem(){
+        preferences.begin("Triggers", true);
+
+        ltON = preferences.getUShort("LTT", 1);
+        rtON = preferences.getUShort("RTT", 1);
 
         preferences.end();
     }
@@ -968,6 +1011,14 @@ private:
     }
 
     /**
+     * @brief parse trigger toggling message
+     */
+    void ParseTriggerToggleString(String toggleStr){
+        rtON = (toggleStr[2] == '0') ? 0 : 1;
+        ltON = (toggleStr[1] == '0') ? 0 : 1;
+    } 
+
+    /**
      * @brief parses the calibration string and fills the stick calibration struct with the new values.
      *        New values stored in struct but not saved to memory unless user chooses to
      * calvals.ax = {west, n1, n2, neutch....}
@@ -1067,13 +1118,17 @@ private:
             else if (fifthChar == ','){
                 ParseCalibrationString(receivedMSG);
             }
+            else if (firstChar == 'T'){
+                ParseTriggerToggleString(receivedMSG);
+            }
             else if (receivedMSG == "SAC" && savedCalib == 0){ // SAC means Save Analog Calibration Values
                 writeStickCalToMem();
                 writeStickDeadzonesToMem();
+                writeTriggerTogglingToMem();
                 savedCalib = 1;
             }
             else if (receivedMSG == "RAC"){
-                char AnalogCalibMSG[179];
+                char AnalogCalibMSG[139];
                 sprintf(AnalogCalibMSG,
                         "%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d",
                         stickCalVals.AX[0], stickCalVals.AX[1], stickCalVals.AX[2], stickCalVals.AX[3],
@@ -1088,12 +1143,14 @@ private:
                 Ch1.setValue(AnalogCalibMSG);
                 Ch1.notify();
             }
+            else if (receivedMSG == "RTT") {
+                char triggerToggleMsg[2];
+                sprintf(triggerToggleMsg, "%d%d", ltON, rtON );
+                Ch1.setValue(triggerToggleMsg);
+                Ch1.notify();
+            }
             else if (fourthChar == ','){
                 ParseDeadzoneString(receivedMSG);
-            }
-            else if (receivedMSG == "SSD" && savedDeadzones == 0){ // SSD = Save Stick Deadzones
-                writeStickDeadzonesToMem();
-                savedDeadzones = 1;
             }
             else if (thirdChar == '.'){
                 ParseButtonMappingString(receivedMSG);
