@@ -5,6 +5,8 @@ const Digital_Button_Map = new Map();
 const Toggle_Map = new Map();
 setDefaultMapping();
 
+var current_buttons_in = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+
 
 var first_clicked = "";
 var second_clicked = "";
@@ -59,6 +61,12 @@ async function handleNewDigitalData(event){
         }
         // console.log([...Digital_Button_Map.entries()]);
         // console.log([...Toggle_Map.entries()]);
+    }
+    else if(str4.length == 16){
+        for(let i = 0; i< 16; i++){
+            current_buttons_in[i] = parseInt(str4[i]);
+            setColourFlags();
+        }
     }
     // console.log(str4);
 }
@@ -177,12 +185,21 @@ function sendButtonMapping(){
         }
     }
     sendMSG(msg);
+    setTimeout(() => {
+        sendMSG("D");
+    }, 1000);
 }
 
 function saveButtonMapping(){
     sendMSG("SBM"); // SBM = Save Button Mapping
+    setTimeout(() => {
+        sendMSG("D");
+    }, 1000);
 }
 
 function requestButtonMapping(){
     sendMSG("RBM"); // RBM = Request Button Mapping
+    setTimeout(() => {
+        sendMSG("D");
+    }, 1000);
 }
