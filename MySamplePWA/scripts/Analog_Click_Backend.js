@@ -160,50 +160,98 @@ function parseScreenClick(event){
         if(A_Button_flag && ctx.isPointInPath(A_Button_Path,x,y)){
             console.log("Clicked A Button");
             onGCSimButtonClicked("A");
+            A_Colour_flag = 1;
+            setTimeout(() => {
+                A_Colour_flag = 0;
+            }, button_colour_delay);
         }
         if(B_Button_flag && ctx.isPointInPath(B_Button_Path,x,y)){
             console.log("Clicked B Button");
             onGCSimButtonClicked("B");
+            B_Colour_flag = 1;
+            setTimeout(() => {
+                B_Colour_flag = 0;
+            }, button_colour_delay);
         }
         if(S_Button_flag && ctx.isPointInPath(S_Button_Path,x,y)){
             console.log("Clicked Start Button");
             onGCSimButtonClicked("S");
+            S_Colour_flag = 1;
+            setTimeout(() => {
+                S_Colour_flag = 0;
+            }, button_colour_delay);
         }
         if(D_Button_flag && ctx.isPointInPath(DU_Button_Path,x,y)){
             console.log("Clicked D-Pad Up Button");
             onGCSimButtonClicked("u");
+            u_Colour_flag = 1;
+            setTimeout(() => {
+                u_Colour_flag = 0;
+            }, button_colour_delay);
         }
         if(D_Button_flag && ctx.isPointInPath(DR_Button_Path,x,y)){
             console.log("Clicked D-Pad Rigth Button");
             onGCSimButtonClicked("r");
+            r_Colour_flag = 1;
+            setTimeout(() => {
+                r_Colour_flag = 0;
+            }, button_colour_delay);
         }
         if(D_Button_flag && ctx.isPointInPath(DD_Button_Path,x,y)){
             console.log("Clicked D-Pad Down Button");
             onGCSimButtonClicked("d");
+            d_Colour_flag = 1;
+            setTimeout(() => {
+                d_Colour_flag = 0;
+            }, button_colour_delay);
         }
         if(D_Button_flag && ctx.isPointInPath(DL_Button_Path,x,y)){
             console.log("Clicked D-Pad Left Button");
             onGCSimButtonClicked("l");
+            l_Colour_flag = 1;
+            setTimeout(() => {
+                l_Colour_flag = 0;
+            }, button_colour_delay);
         }
         if(X_Button_flag && ctx.isPointInPath(X_Button_Path,x,y)){
             console.log("Clicked X Button");
             onGCSimButtonClicked("X");
+            X_Colour_flag = 1;
+            setTimeout(() => {
+                X_Colour_flag = 0;
+            }, button_colour_delay);
         }
         if(Y_Button_flag && ctx.isPointInPath(Y_Button_Path,x,y)){
             console.log("Clicked Y Button");
             onGCSimButtonClicked("Y");
+            Y_Colour_flag = 1;
+            setTimeout(() => {
+                Y_Colour_flag = 0;
+            }, button_colour_delay);
         }
         if(Z_Button_flag && ctx.isPointInPath(Z_Button_Path,x,y)){
             console.log("Clicked Z Button");
             onGCSimButtonClicked("Z");
+            Z_Colour_flag = 1;
+            setTimeout(() => {
+                Z_Colour_flag = 0;
+            }, button_colour_delay);
         }
         if(L_Button_flag && ctx.isPointInPath(L_Button_Path,x,y)){
             console.log("Clicked L Button");
             onGCSimButtonClicked("L");
+            L_Colour_flag = 1;
+            setTimeout(() => {
+                L_Colour_flag = 0;
+            }, button_colour_delay);
         }
         if(R_Button_flag && ctx.isPointInPath(R_Button_Path,x,y)){
             console.log("Clicked R Button");
             onGCSimButtonClicked("R");
+            R_Colour_flag = 1;
+            setTimeout(() => {
+                R_Colour_flag = 0;
+            }, button_colour_delay);
         }
         if(Read_Mapping_Button_Flag && ctx.isPointInPath(Read_Mapping_Button_Path,x,y)){
             Read_Mapping_Button_Colour_Flag = 1;

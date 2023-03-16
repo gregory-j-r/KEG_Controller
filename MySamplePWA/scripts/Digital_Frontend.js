@@ -6,6 +6,7 @@ const Digital_Instructions = [
     "Click the same button twice to toggle it"
 ];
 
+
 const A_Button_Path = new Path2D();
 const B_Button_Path = new Path2D();
 const S_Button_Path = new Path2D();
@@ -228,6 +229,34 @@ var L_Button_flag = 0;
 var R_Button_flag = 0;
 var Draw_Tags_Flag = 0;
 
+var A_Colour_flag = 0;
+var B_Colour_flag = 0;
+var S_Colour_flag = 0;
+var D_Colour_flag = 0;
+var X_Colour_flag = 0;
+var Y_Colour_flag = 0;
+var Z_Colour_flag = 0;
+var L_Colour_flag = 0;
+var R_Colour_flag = 0;
+var u_Colour_flag = 0;
+var r_Colour_flag = 0;
+var d_Colour_flag = 0;
+var l_Colour_flag = 0;
+
+const A_Colours = [`rgb(68,213,208)`,`rgb(35,158,155)`];
+const B_Colours = [`rgb(249,21,48)`,`rgb(166,4,24)`];
+const S_Colours = [`rgb(240,237,246)`,`rgb(209,201,228)`];
+const X_Colours = [`rgb(240,237,246)`,`rgb(209,201,228)`];
+const Y_Colours = [`rgb(240,237,246)`,`rgb(209,201,228)`];
+const Z_Colours = [`rgb(67,94,225)`,`rgb(26,49,157)`];
+const L_Colours = [`rgb(240,237,246)`,`rgb(209,201,228)`];
+const R_Colours = [`rgb(240,237,246)`,`rgb(209,201,228)`];
+const u_Colours = [`rgb(240,237,246)`,`rgb(209,201,228)`];
+const r_Colours = [`rgb(240,237,246)`,`rgb(209,201,228)`];
+const d_Colours = [`rgb(240,237,246)`,`rgb(209,201,228)`];
+const l_Colours = [`rgb(240,237,246)`,`rgb(209,201,228)`];
+
+
 var Read_Mapping_Button_Flag = 0;
 var Send_Mapping_Button_Flag = 0;
 var Save_Mapping_Button_Flag = 0;
@@ -255,8 +284,8 @@ function drawDigital(){
 
         // Start Generate Gamecube Buttons
         if(A_Button_flag){
-            ctx.strokeStyle = `rgb(68,213,208)`;
-            ctx.fillStyle = `rgb(68,213,208)`;
+            ctx.strokeStyle = A_Colours[A_Colour_flag];
+            ctx.fillStyle = A_Colours[A_Colour_flag];
             ctx.stroke(A_Button_Path);
             ctx.fill(A_Button_Path);
             ctx.strokeStyle = `rgb(53,179,175)`;
@@ -266,8 +295,8 @@ function drawDigital(){
         }
 
         if(B_Button_flag){
-            ctx.strokeStyle = `rgb(249,21,48)`;
-            ctx.fillStyle = `rgb(249,21,48)`;
+            ctx.strokeStyle = B_Colours[B_Colour_flag];
+            ctx.fillStyle = B_Colours[B_Colour_flag];
             ctx.stroke(B_Button_Path);
             ctx.fill(B_Button_Path);
             ctx.strokeStyle = `rgb(174,4,26)`;
@@ -276,8 +305,8 @@ function drawDigital(){
             ctx.fillText("B", bx0-7, by0+8);
         }
         if(S_Button_flag){
-            ctx.strokeStyle = `rgb(240,237,246)`;
-            ctx.fillStyle = `rgb(240,237,246)`;
+            ctx.strokeStyle = S_Colours[S_Colour_flag];
+            ctx.fillStyle = S_Colours[S_Colour_flag];
             ctx.stroke(S_Button_Path);
             ctx.fill(S_Button_Path);
             ctx.strokeStyle = `rgb(240,237,246)`;
@@ -287,16 +316,24 @@ function drawDigital(){
         }
 
         if(D_Button_flag){
-            ctx.strokeStyle = `rgb(240,237,246)`;
-            ctx.fillStyle = `rgb(240,237,246)`;
+            ctx.strokeStyle = u_Colours[u_Colour_flag];
+            ctx.fillStyle = u_Colours[u_Colour_flag];
             ctx.stroke(DU_Button_Path);
             ctx.fill(DU_Button_Path);
+            ctx.strokeStyle = r_Colours[r_Colour_flag];
+            ctx.fillStyle = r_Colours[r_Colour_flag];
             ctx.stroke(DR_Button_Path);
             ctx.fill(DR_Button_Path);
+            ctx.strokeStyle = d_Colours[d_Colour_flag];
+            ctx.fillStyle = d_Colours[d_Colour_flag];
             ctx.stroke(DD_Button_Path);
             ctx.fill(DD_Button_Path);
+            ctx.strokeStyle = l_Colours[l_Colour_flag];
+            ctx.fillStyle = l_Colours[l_Colour_flag];
             ctx.stroke(DL_Button_Path);
             ctx.fill(DL_Button_Path);
+            ctx.strokeStyle = u_Colours[0];
+            ctx.fillStyle = u_Colours[0];
             ctx.stroke(DC_Button_Path);
             ctx.fill(DC_Button_Path);
 
@@ -309,8 +346,8 @@ function drawDigital(){
         }
 
         if(X_Button_flag){
-            ctx.strokeStyle = `rgb(240,237,246)`;
-            ctx.fillStyle = `rgb(240,237,246)`;
+            ctx.strokeStyle = X_Colours[X_Colour_flag];
+            ctx.fillStyle = X_Colours[X_Colour_flag];
             ctx.stroke(X_Button_Path);
             ctx.fill(X_Button_Path);
             ctx.fillStyle = `rgb(203,200,207)`;
@@ -319,8 +356,8 @@ function drawDigital(){
         }
 
         if(Y_Button_flag){
-            ctx.strokeStyle = `rgb(240,237,246)`;
-            ctx.fillStyle = `rgb(240,237,246)`;
+            ctx.strokeStyle = Y_Colours[Y_Colour_flag];
+            ctx.fillStyle = Y_Colours[Y_Colour_flag];
             ctx.stroke(Y_Button_Path);
             ctx.fill(Y_Button_Path);
             ctx.fillStyle = `rgb(203,200,207)`;
@@ -329,8 +366,8 @@ function drawDigital(){
         }
 
         if(Z_Button_flag){
-            ctx.strokeStyle = `rgb(67,94,225)`;
-            ctx.fillStyle = `rgb(67,94,225)`;
+            ctx.strokeStyle = Z_Colours[Z_Colour_flag];
+            ctx.fillStyle = Z_Colours[Z_Colour_flag];
             ctx.stroke(Z_Button_Path);
             ctx.fill(Z_Button_Path);
             ctx.fillStyle = `rgb(33,64,207)`;
@@ -339,8 +376,8 @@ function drawDigital(){
         }
 
         if(L_Button_flag){
-            ctx.strokeStyle = `rgb(240,237,246)`;
-            ctx.fillStyle = `rgb(240,237,246)`;
+            ctx.strokeStyle = L_Colours[L_Colour_flag];
+            ctx.fillStyle = L_Colours[L_Colour_flag];
             ctx.stroke(L_Button_Path);
             ctx.fill(L_Button_Path);
             ctx.fillStyle = `rgb(203,200,207)`;
@@ -348,8 +385,8 @@ function drawDigital(){
             ctx.fillText("L", lx0+23, ly0-37);
         }
         if(R_Button_flag){
-            ctx.strokeStyle = `rgb(240,237,246)`;
-            ctx.fillStyle = `rgb(240,237,246)`;
+            ctx.strokeStyle = R_Colours[R_Colour_flag];
+            ctx.fillStyle = R_Colours[R_Colour_flag];
             ctx.stroke(R_Button_Path);
             ctx.fill(R_Button_Path);
             ctx.fillStyle = `rgb(203,200,207)`;
@@ -514,6 +551,47 @@ function onOrOff(t){
         }
         else{
             return "IDK"
+        }
+    }
+}
+
+function setColourFlags(){
+    for(let i = 0; i<16; i++){
+        if(i==3){
+            S_Colour_flag = current_buttons_in[i];
+        }
+        else if(i==4){
+            Y_Colour_flag = current_buttons_in[i];
+        }
+        else if(i==5){
+            X_Colour_flag = current_buttons_in[i];
+        }
+        else if(i==6){
+            B_Colour_flag = current_buttons_in[i];
+        }
+        else if(i==7){
+            A_Colour_flag = current_buttons_in[i];
+        }
+        else if(i==9){
+            L_Colour_flag = current_buttons_in[i];
+        }
+        else if(i==10){
+            R_Colour_flag = current_buttons_in[i];
+        }
+        else if(i==11){
+            Z_Colour_flag = current_buttons_in[i];
+        }
+        else if(i==12){
+            u_Colour_flag = current_buttons_in[i];
+        }
+        else if(i==13){
+            d_Colour_flag = current_buttons_in[i];
+        }
+        else if(i==14){
+            r_Colour_flag = current_buttons_in[i];
+        }
+        else if(i==15){
+            l_Colour_flag = current_buttons_in[i];
         }
     }
 }
