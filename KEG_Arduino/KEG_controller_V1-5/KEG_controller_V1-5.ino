@@ -689,7 +689,7 @@ private:
         preferences.begin("AnalogCal", false);
         // uint16_t toSave;
 
-        for (int i = 0; i <= numCalibPoints; i++) {
+        for (int i = 0; i < numCalibPoints; i++) {
             String id = String(i);
             String axID = "AX" + id;
             String ayID = "AY" + id;
@@ -885,7 +885,7 @@ private:
     void readStickCalFromMem(){
         preferences.begin("AnalogCal", true);
 
-        for (int i = 0; i <= numCalibPoints; i++) {
+        for (int i = 0; i < numCalibPoints; i++) {
             String id = String(i);
             String axID = "AX" + id;
             String ayID = "AY" + id;
@@ -896,13 +896,13 @@ private:
             sortedStickCalVals.AX[i] = preferences.getUShort(axID.c_str(), 0);
             
             stickCalVals.AY[i] = preferences.getUShort(ayID.c_str(), 0);
-            sortedStickCalVals.AY[i] = preferences.getUShort(axID.c_str(), 0);
+            sortedStickCalVals.AY[i] = preferences.getUShort(ayID.c_str(), 0);
             
             stickCalVals.CX[i] = preferences.getUShort(cxID.c_str(), 0);
-            sortedStickCalVals.CX[i] = preferences.getUShort(axID.c_str(), 0);
+            sortedStickCalVals.CX[i] = preferences.getUShort(cxID.c_str(), 0);
             
             stickCalVals.CY[i] = preferences.getUShort(cyID.c_str(), 0);
-            sortedStickCalVals.CY[i] = preferences.getUShort(axID.c_str(), 0);
+            sortedStickCalVals.CY[i] = preferences.getUShort(cyID.c_str(), 0);
 
         }
         preferences.end();
