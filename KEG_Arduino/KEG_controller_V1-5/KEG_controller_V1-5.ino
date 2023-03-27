@@ -148,6 +148,13 @@ public:
             ESP.restart();
         }
 
+        // check to see if holding down A, B, and dpad-left on boot
+        // Will erase controller settings from memory
+        if (!digitalRead(charToPinMap['A']) && !digitalRead(charToPinMap['B']) && !digitalRead(charToPinMap['l'])){
+            reset_memory();
+            delay(1000);
+        }
+
         readStickCalFromMem();        // read the stick calibration values from memory
         readStickDeadzonesFromMem();  // read the stick deadzone values from memory
         readButtonMappingFromMem();   // read button mapping from memory
@@ -228,6 +235,9 @@ public:
     }
 
 private:
+    // Firmware version tag
+    String firmwareVersion = "v1.1.2-alpha";
+
     // BLE stuff
     String BLEpassword;
     int BLENameWriteFlag = 0;
@@ -1097,7 +1107,8 @@ private:
                 // if receivedMSG == BLEpassword && isX && isY)
                 if ((String)Ch2.getValue().c_str() == BLEpassword && isX && isY){
                     password_correct = 1;
-                    Ch1.setValue("Password Correct");
+                    String connected = "Connected to: " + firmwareVersion;
+                    Ch1.setValue(connected.c_str());
                     Ch1.notify();
                 }
                 else{
@@ -1223,6 +1234,31 @@ private:
         if (buffer_holder[4] == STOP){
             stop_bit_9 = 1;
         }
+    }
+
+    /**
+     * @brief Erase controller settings from memory. Note, namespaces not deleted
+    */
+    void reset_memory(){
+        preferences.begin("AnalogCal", false); 
+        preferences.clear();
+        preferences.end();
+
+        preferences.begin("AnalogDead", false); 
+        preferences.clear();
+        preferences.end();
+
+        preferences.begin("DigitalMap", false); 
+        preferences.clear();
+        preferences.end();
+
+        preferences.begin("Triggers", false); 
+        preferences.clear();
+        preferences.end();
+
+        // preferences.begin("Passwords", false); 
+        // preferences.clear();
+        // preferences.end();
     }
 };
 
