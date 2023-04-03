@@ -236,7 +236,7 @@ public:
 
 private:
     // Firmware version tag
-    String firmwareVersion = "v1.1.2-alpha";
+    String firmwareVersion = "v1.1.2-W-debug-1";
 
     // BLE stuff
     String BLEpassword;
@@ -1211,6 +1211,40 @@ private:
                 Ch1.setValue(digitalInputsMsg);
                 Ch1.notify();
 
+            }
+            else if(receivedMSG.substring(0,5) == "Debug"){
+                String debug_val = receivedMSG.substring(5);
+                
+                if(debug_val == "0"){
+                    char CommandByteMsg[10];
+                    sprintf(CommandByteMsg, "%03d", command_byte );
+                    Ch1.setValue(CommandByteMsg);
+                    Ch1.notify();
+                }
+                else if(debug_val == "1"){
+                    char InGameReplyMsg[135];
+                    sprintf(InGameReplyMsg, "%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d", 
+                            InGameReply[0],InGameReply[1],InGameReply[2],InGameReply[3],
+                            InGameReply[4],InGameReply[5],InGameReply[6],InGameReply[7],
+                            InGameReply[8],InGameReply[9],InGameReply[10],InGameReply[11],
+                            InGameReply[12],InGameReply[13],InGameReply[14],InGameReply[15],
+                            InGameReply[16],InGameReply[17],InGameReply[18],InGameReply[19],
+                            InGameReply[20],InGameReply[21],InGameReply[22],InGameReply[23],
+                            InGameReply[24],InGameReply[25],InGameReply[26],InGameReply[27],
+                            InGameReply[28],InGameReply[29],InGameReply[30],InGameReply[31],
+                            InGameReply[32]);
+                    Ch1.setValue(InGameReplyMsg);
+                    Ch1.notify();
+                }
+                // else if(debug_val == "2"){
+
+                // }
+                // else if(debug_val == "3"){
+
+                // }
+                // else if(debug_val == "4"){
+                    
+                // }
             }
         }
     }
