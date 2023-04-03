@@ -14,10 +14,15 @@
     <button style="font-size : 28px;height:50px;width:140px;position:absolute;top:80px;left:298px;" onclick="enableWifiUpload()">Update</button>
     <button style="font-size : 28px;height:50px;width:140px;position:absolute;top:80px;left:443px;" onclick="requestAnalogReadings()">Analog</button>
     <button style="font-size : 28px;height:50px;width:140px;position:absolute;top:80px;left:588px;" onclick="requestDigitalReadings()">Digital</button>
+    <button id="debug button" style="position:absolute; left:10px; top:800px; font-size:25px" onclick="sendDebugMSG()">Debug</div>
     <button style="font-size : 28px;height:50px;width:140px;position:absolute;top:20px;left:235px; background-color:rgba(255,255,255,0.0); border:none;" id="githubButton;" onclick="goToGithub();"><img src="/../githubIcon.png" /></button>
     <button style="font-size : 28px;height:50px;width:140px;" ></button> <!--  for spacing temporarilly-->
     
     <div id="on screen information" type="button" style="position:absolute; left:350px; top:30px; font-size:25px" onclick="redirectPage()">Click Connect To Pair Controller</div>
+    <div id="Firmware Version" style="position:absolute; left:10px; top:135px; font-size:30px">Default Password  = KEG CONCH</div>
+
+
+     
     
 
     <div id="popup" style="width:400px;height:200px;padding:0px;background-color:white;position:absolute;top:0px;left:100px;display:none;font-size : 28px; border-radius: 10px;">
@@ -94,6 +99,7 @@
     <script src="/../scripts/Digital_Frontend.js"></script>
     <script src="/../scripts/Digital_Backend.js"></script>
     <script src="/../scripts/Wifi_Backend.js"></script>
+    <script src="/../scripts/DebugBackend.js"></script>
 
     <canvas id="canvas" width="150" height="150"></canvas>
 

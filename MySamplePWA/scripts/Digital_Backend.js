@@ -17,6 +17,7 @@ function requestDigitalReadings(){
     // if(password_correct){
         if(in_window_index != 2){
             finishedCalibration();
+            finishedDebug();
             DigitalInter();
             in_window_index = 2;
             var msg = "RBM";
@@ -66,6 +67,7 @@ async function handleNewDigitalData(event){
         for(let i = 0; i< 16; i++){
             current_buttons_in[i] = parseInt(str4[i]);
             setColourFlags();
+            console.log(str4);
         }
     }
     // console.log(str4);

@@ -88,7 +88,7 @@ function parseScreenClick(event){
                 showDeadzonePopup();
             }, 1000);
         }
-        if(toggle_triggers_flag && ctx.isPointInPath(toggle_L_trigger_rect,x,y)){
+        if(toggle_triggers_flag && ready_toggle == 0 && ctx.isPointInPath(toggle_L_trigger_rect,x,y)){
             toggle_L_trigger_colour_flag = 1;
             setTimeout(() => {
                 toggle_L_trigger_colour_flag = 0;
@@ -105,7 +105,7 @@ function parseScreenClick(event){
             var trig_msg = "T" + L_Trigger_on.toString() + R_Trigger_on.toString();
             sendMSG(trig_msg);
         }
-        if(toggle_triggers_flag && ctx.isPointInPath(toggle_R_trigger_rect,x,y)){
+        if(toggle_triggers_flag && ready_toggle == 0 && ctx.isPointInPath(toggle_R_trigger_rect,x,y)){
             toggle_R_trigger_colour_flag = 1;
             setTimeout(() => {
                 toggle_R_trigger_colour_flag = 0;

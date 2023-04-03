@@ -6,6 +6,7 @@ var in_window_index = 0;
 var connected_flag = 0;
 var reset_password = 0;
 
+
 function isWebBluetoothEnabled() {
     if(connected_flag == 0){
         // this is what generates the BLE pop up searching window
@@ -17,6 +18,7 @@ function isWebBluetoothEnabled() {
         })
 
         .then(device => {
+            device.addEventListener( 'gattserverdisconnected', handleDisconnect );
             return device.gatt.connect();
         })
         .then(server => {
@@ -68,9 +70,10 @@ async function handleNewPassMSG(event){
     const value = event.target.value;
     var enc = new TextDecoder("utf-8");
     var reading = enc.decode(value);
-    if(reading == "Password Correct"){
+    if(reading.startsWith("Connected to:") || reading.startsWith("Password Correct")){ // for backwards compatability with v1.1.1 alpha and below
         console.log("Password Correct");
         document.getElementById("on screen information").innerHTML = "Password Correct";
+        document.getElementById("Firmware Version").innerHTML = reading;
         PASSWORD_CH.stopNotifications();
         PASSWORD_CH.removeEventListener("characteristicvaluechanged",handleNewPassMSG);
         password_correct = 1;
@@ -132,8 +135,27 @@ function closeNewBLEName(){
 }
 
 function changeButtonNames(){
-    document.getElementById("Connect_Button").style.fontSize = "20px";
-    document.getElementById("Password_Button").style.fontSize = "20px";
-    document.getElementById("Connect_Button").innerHTML = "Change BLE Name";
-    document.getElementById("Password_Button").innerHTML = "Change Password";
+    if(connected_flag){
+        document.getElementById("Connect_Button").style.fontSize = "20px";
+        document.getElementById("Password_Button").style.fontSize = "20px";
+        document.getElementById("Connect_Button").innerHTML = "Change BLE Name";
+        document.getElementById("Password_Button").innerHTML = "Change Password";
+    }
+    else{
+        document.getElementById("Connect_Button").style.fontSize = "28px";
+        document.getElementById("Password_Button").style.fontSize = "28px";
+        document.getElementById("Connect_Button").innerHTML = "Connect";
+        document.getElementById("Password_Button").innerHTML = "Password";
+    }
 }
+
+
+function handleDisconnect(event){
+    console.log(`${event.target.name} is disconnected`);
+    document.getElementById("on screen information").innerHTML = `${event.target.name} is disconnected`;
+    document.getElementById("Firmware Version").innerHTML = "";
+    connected_flag = 0;
+    password_correct = 0;
+    changeButtonNames();
+  };
+

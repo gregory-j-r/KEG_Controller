@@ -17,7 +17,7 @@ var Curr_AY_Cal_Vals = [0,0,0,0,0,0,0];
 var Curr_CX_Cal_Vals = [0,0,0,0,0,0,0];
 var Curr_CY_Cal_Vals = [0,0,0,0,0,0,0];
 
-
+var ready_toggle = 0;
 
 var ANALOG_CH;
 
@@ -49,6 +49,7 @@ function requestAnalogReadings(){
     // if(password_correct){
         if(in_window_index != 1){
             finishedDigitalSettings();
+            finishedDebug();
             inter();
             in_window_index = 1;
             sendMSG("RAC");
@@ -62,20 +63,22 @@ function requestAnalogReadings(){
             .then(characteristic => {
                 if (characteristic.properties.notify){
                     ANALOG_CH = characteristic;
-                    characteristic.addEventListener("characteristicvaluechanged",handleNewAnalogData);
-                    characteristic.startNotifications();
-
-                    console.log("Analog Notifications enabled");
                     setTimeout(() => {
-                        sendMSG("RDC");
+                        characteristic.addEventListener("characteristicvaluechanged",handleNewAnalogData);
+                        characteristic.startNotifications();
+
                         console.log("Analog Notifications enabled");
                         setTimeout(() => {
-                            sendMSG("RTT");
+                            sendMSG("RDC");
+                            console.log("Analog Notifications enabled");
                             setTimeout(() => {
-                                sendMSG("A");
+                                sendMSG("RTT");
+                                setTimeout(() => {
+                                    sendMSG("A");
+                                }, 1000);
                             }, 1000);
-                        }, 1000);
-                    }, 1000); 
+                        }, 1000); 
+                    },1000);
                 }
                 return 0;
             })
@@ -149,6 +152,10 @@ async function handleNewAnalogData(event){
         L_Trigger_on = parseInt(TriggerToggling[0]);
         R_Trigger_on = parseInt(TriggerToggling[1]);
         console.log("Got trigger toggling = " + L_Trigger_on + "," + R_Trigger_on);
+    }
+    else{
+        console.log("Got analog message: ")
+        console.log(str3);
     }
 }
 
@@ -229,7 +236,12 @@ function doneCalibration(){
     redo_last_store_flag = 0;
     toggle_triggers_flag = 1;
     toggle_stick_raw_flag = 1;
-    // setCurrentCalVals();
+    
+    // don't ;et trigger toggle buttons get hit for 1 sec
+    ready_toggle = 1;
+    setTimeout(() => {
+        ready_toggle = 0;
+      }, 1);
 }
 
 function finishedCalibration(){
@@ -310,7 +322,7 @@ function requestAnalogCalibration(){
                     sendMSG("A");
                 }, 1000);
             }, 1000);
-        }, 1000); 
+        }, 2000); 
         // get_current_cal_flag = 2;
     }
     else{
