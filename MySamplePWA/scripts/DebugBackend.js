@@ -54,12 +54,14 @@ function handleNewDebugData(event){
     } 
     else if(debug_input == "2"){
         var bufferHolderAsBits = ""
-        for(let i = 0; i<15*3; i+=3){
+        for(let i = 0; i<=str5.length-3; i+=3){
             if(i%4 == 0){
                 bufferHolderAsBits += "\n";
             }
             bufferHolderAsBits += To2Bits(str5.substring(i,i+3));
         }
+        console.log(bufferHolderAsBits);
+        // console.log(str5)
     } 
 }
 
