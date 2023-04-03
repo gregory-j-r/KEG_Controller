@@ -209,11 +209,13 @@ public:
             if (buff_index >= BufferHolderLen){
                 buff_index = 0;
             }
-            buffer_holder[buff_index] = readVal;
-            buff_index++;
+            if (readVal != -1){
+                buffer_holder[buff_index] = readVal;
+                buff_index++;
+            }
 
             if (triggered == 1){
-                cleanUpBufferRead(buffer_holder, buff_index);
+                // cleanUpBufferRead(buffer_holder, buff_index);
                 choose_and_reply();
                 clearUARTrx();
                 buff_index = 0;
@@ -223,7 +225,7 @@ public:
 
             if (readVal == STOP){
                 timerAlarmDisable(My_timer);
-                cleanUpBufferRead(buffer_holder, buff_index);
+                // cleanUpBufferRead(buffer_holder, buff_index);
                 choose_and_reply();
                 buff_index = 0;
                 timer_flag = 0;
@@ -236,7 +238,7 @@ public:
 
 private:
     // Firmware version tag
-    String firmwareVersion = "v1.1.2-W-debug-1";
+    String firmwareVersion = "v1.1.3-alpha-debug";
 
     // BLE stuff
     String BLEpassword;
@@ -1119,7 +1121,7 @@ private:
             }
 
             if (receivedMSG == "A"){ // A means requesting Analog data
-                char AnalogMSG[19] = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
+                char AnalogMSG[30];// = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
                 sprintf(AnalogMSG, "%04d,%04d,%04d,%04d,%04d,%04d", analogMeans.aX, analogMeans.aY,
                         analogMeans.cX, analogMeans.cY,
                         analogMeans.aL, analogMeans.aR);
@@ -1139,7 +1141,7 @@ private:
                 savedCalib = 1;
             }
             else if (receivedMSG == "RAC"){
-                char AnalogCalibMSG[139];
+                char AnalogCalibMSG[140];
                 sprintf(AnalogCalibMSG,
                         "%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d:%04d,%04d,%04d,%04d,%04d,%04d,%04d",
                         stickCalVals.AX[0], stickCalVals.AX[1], stickCalVals.AX[2], stickCalVals.AX[3],
@@ -1185,7 +1187,7 @@ private:
                 passWriteFlag = 1;
             }
             else if (receivedMSG == "RDC"){
-                char AnalogDeadzoneMSG[47];
+                char AnalogDeadzoneMSG[60];
                 sprintf(AnalogDeadzoneMSG, "%03d,%03d,%03d:%03d,%03d,%03d:%03d,%03d,%03d:%03d,%03d,%03d",
                         stickDeadzVals.AX[0], stickDeadzVals.AX[1], stickDeadzVals.AX[2],
                         stickDeadzVals.AY[0], stickDeadzVals.AY[1], stickDeadzVals.AY[2],
@@ -1200,7 +1202,7 @@ private:
                 BLENameWriteFlag = 1;
             }            
             else if (receivedMSG == "D"){
-                char digitalInputsMsg[16];
+                char digitalInputsMsg[33];
 
                 sprintf(digitalInputsMsg, "%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d",
                         buttons_in[0], buttons_in[1], buttons_in[2], buttons_in[3],
@@ -1216,13 +1218,13 @@ private:
                 String debug_val = receivedMSG.substring(5);
                 
                 if(debug_val == "0"){
-                    char CommandByteMsg[10];
+                    char CommandByteMsg[5];
                     sprintf(CommandByteMsg, "%03d", command_byte );
                     Ch1.setValue(CommandByteMsg);
                     Ch1.notify();
                 }
                 else if(debug_val == "1"){
-                    char InGameReplyMsg[135];
+                    char InGameReplyMsg[133];
                     sprintf(InGameReplyMsg, "%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d", 
                             InGameReply[0],InGameReply[1],InGameReply[2],InGameReply[3],
                             InGameReply[4],InGameReply[5],InGameReply[6],InGameReply[7],
@@ -1236,9 +1238,16 @@ private:
                     Ch1.setValue(InGameReplyMsg);
                     Ch1.notify();
                 }
-                // else if(debug_val == "2"){
-
-                // }
+                else if(debug_val == "2"){
+                    char BufferHolderMsg[61];
+                    sprintf(BufferHolderMsg, "%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d%03d", 
+                            buffer_holder[0],buffer_holder[1],buffer_holder[2],buffer_holder[3],
+                            buffer_holder[4],buffer_holder[5],buffer_holder[6],buffer_holder[7],
+                            buffer_holder[8],buffer_holder[9],buffer_holder[10],buffer_holder[11],
+                            buffer_holder[12],buffer_holder[13],buffer_holder[14],buffer_holder[15]);
+                    Ch1.setValue(BufferHolderMsg);
+                    Ch1.notify();
+                }
                 // else if(debug_val == "3"){
 
                 // }

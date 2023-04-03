@@ -65,7 +65,10 @@ function handleNewDebugData(event){
         }
         console.log("In Game Reply = " +InGameReplyAsBits);
         console.log()
-    }
+    } 
+    else if(debug_input == "2"){
+        console.log(str5);
+    } 
 }
 
 function finishedDebug(){
