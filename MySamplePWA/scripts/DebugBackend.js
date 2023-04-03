@@ -43,31 +43,23 @@ function handleNewDebugData(event){
         }
         var val = ""
         for(let i = 0; i<33; i++){
-            val = InGameReplyArr[i]
-            if(val == "004"){
-                InGameReplyAsBits += "00";
-            }
-            else if(val == "055"){
-                InGameReplyAsBits += "11";
-            }
-            else if(val == "052"){
-                InGameReplyAsBits += "01";
-            }
-            else if(val == "007"){
-                InGameReplyAsBits += "10";
-            }
-            else if(val == "063"){
-                InGameReplyAsBits += "STOP";
-            }
-            if(i%4 == 0 && i!= 0){
+            if(i%4 == 0){
                 InGameReplyAsBits += "\n";
             }
+            val = InGameReplyArr[i]
+            InGameReplyAsBits += To2Bits(val)
         }
         console.log("In Game Reply = " +InGameReplyAsBits);
         console.log()
     } 
     else if(debug_input == "2"){
-        console.log(str5);
+        var bufferHolderAsBits = ""
+        for(let i = 0; i<15*3; i+=3){
+            if(i%4 == 0){
+                bufferHolderAsBits += "\n";
+            }
+            bufferHolderAsBits += To2Bits(str5.substring(i,i+3));
+        }
     } 
 }
 
@@ -79,4 +71,24 @@ function finishedDebug(){
     catch(err){
         console.log(err.message);
     }
+}
+
+function To2Bits(val){
+    var ret_val = val;
+    if(val == "004"){
+        ret_val =  "00";
+    }
+    else if(val == "055"){
+        ret_val = "11";
+    }
+    else if(val == "052"){
+        ret_val = "01";
+    }
+    else if(val == "007"){
+        ret_val = "10";
+    }
+    else if(val == "063"){
+        ret_val = "STOP";
+    }
+    return ret_val;
 }
